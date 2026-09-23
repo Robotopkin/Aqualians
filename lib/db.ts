@@ -1,4 +1,5 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { DatabaseSync } from "node:sqlite";
 
@@ -7,6 +8,7 @@ const globalForDb = globalThis as unknown as { auraseaDb?: DatabaseSync };
 function filePath() {
   const custom = process.env.AURASEA_DB?.trim();
   if (custom) return custom;
+  if (process.env.VERCEL) return path.join(os.tmpdir(), "aurasea.db");
   return path.join(process.cwd(), "data", "aurasea.db");
 }
 

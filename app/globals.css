@@ -281,7 +281,8 @@ h1 {
 .profile-page > .top { flex: 0 0 auto; }
 .profile-page > .error { flex: 0 0 auto; }
 .profile-page > .profile-grid { flex: 1 1 auto; min-height: 0; }
-.profile-grid > .scroll-wrap { height: 100%; min-height: 0; }
+.profile-grid > .scroll-wrap { height: 100%; min-width: 0; min-height: 0; }
+.profile-page { max-width: 1440px; }
 .profile-grid > .scroll-wrap > .card {
   height: 100%;
   overflow: hidden;
@@ -568,6 +569,19 @@ h2 {
 .rules summary { cursor: pointer; color: var(--gold); }
 .rules p, .rules li { color: var(--mist); line-height: 1.5; }
 .foot { margin-top: 18px; color: var(--mist); font-size: 12px; line-height: 1.5; }
+.x-mark {
+  position: fixed;
+  right: 22px;
+  bottom: 18px;
+  z-index: 6;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  color: var(--foam);
+  text-decoration: none;
+}
+.x-mark:hover { color: var(--gold); }
 
 h1, h2, .question, .kicker, .eyebrow {
   font-family: var(--font-display), "Cinzel", serif;

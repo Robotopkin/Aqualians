@@ -1,4 +1,5 @@
 import fs from "fs";
+import os from "os";
 import path from "path";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { serverPrivateKey } from "./config";
@@ -14,7 +15,9 @@ function loadAccount(): Account {
     const key = (fromEnv.startsWith("0x") ? fromEnv : `0x${fromEnv}`) as `0x${string}`;
     return privateKeyToAccount(key);
   }
-  const file = path.join(process.cwd(), "data", "server-wallet.json");
+  const file = process.env.VERCEL
+    ? path.join(os.tmpdir(), "server-wallet.json")
+    : path.join(process.cwd(), "data", "server-wallet.json");
   if (fs.existsSync(file)) {
     const saved = JSON.parse(fs.readFileSync(file, "utf8")) as { privateKey: `0x${string}` };
     return privateKeyToAccount(saved.privateKey);
