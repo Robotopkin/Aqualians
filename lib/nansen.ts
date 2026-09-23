@@ -162,13 +162,31 @@ export async function demoFill(categories: CategoryId[], now: number) {
 }
 
 export async function nansenStatus(now = Date.now()) {
+  if (!nansenKey()) {
+    return {
+      live: false,
+      callsTotal: 0,
+      callsToday: 0,
+      budget: dailyBudget(),
+      lastError: null,
+      creditsRemaining: null,
+      updatedAt: null,
+    };
+  }
+  const [callsTotalCount, callsTodayCount, lastError, creditsRemaining, updatedAt] = await Promise.all([
+    callsTotal(),
+    callsToday(now),
+    metaGet("last_error"),
+    metaGet("credits_remaining"),
+    metaGet("last_poll_at"),
+  ]);
   return {
-    live: Boolean(nansenKey()),
-    callsTotal: await callsTotal(),
-    callsToday: await callsToday(now),
+    live: true,
+    callsTotal: callsTotalCount,
+    callsToday: callsTodayCount,
     budget: dailyBudget(),
-    lastError: await metaGet("last_error") || null,
-    creditsRemaining: await metaGet("credits_remaining"),
-    updatedAt: Number(await metaGet("last_poll_at") || 0) || null,
+    lastError: lastError || null,
+    creditsRemaining,
+    updatedAt: Number(updatedAt || 0) || null,
   };
 }

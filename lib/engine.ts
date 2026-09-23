@@ -45,6 +45,10 @@ const globalForBoot = globalThis as unknown as {
 export function boot() {
   if (globalForBoot.auraseaBoot) return globalForBoot.auraseaReady ?? Promise.resolve();
   globalForBoot.auraseaBoot = true;
+  if (process.env.VERCEL) {
+    globalForBoot.auraseaReady = Promise.resolve();
+    return globalForBoot.auraseaReady;
+  }
   const ready = ensureServerAccount().then(() => runTick());
   globalForBoot.auraseaReady = ready;
   globalForBoot.auraseaTimer = setInterval(() => void runTick(), 20_000);
@@ -527,27 +531,36 @@ async function sessionUser(token: string) {
 }
 
 export async function publicState(token: string | null): Promise<PublicState> {
-  await boot();
   const now = Date.now();
-  let viewerRow = token ? await sessionUser(token) : null;
+  const volume = activeVolumeWindow(now);
+  const tx = activeTxWindow(now);
+  await ensureServerAccount();
+  await Promise.all([ensureRound("volume", volume), ensureRound("tx", tx)]);
+  const [viewerRow, open, population, nansen] = await Promise.all([
+    token ? sessionUser(token) : Promise.resolve(null),
+    rows("SELECT * FROM rounds WHERE status = 'open' ORDER BY starts_at ASC") as Promise<unknown> as Promise<RoundRow[]>,
+    one("SELECT COUNT(*) AS n FROM users"),
+    nansenStatus(now),
+  ]);
+  let viewer = viewerRow;
   let grant: PublicState["grant"] = null;
   if (viewerRow) {
-    const granted = await withLock(async () => (viewerRow ? grantIfNeeded(viewerRow) : null));
-    if (granted) {
-      viewerRow = granted.user;
-      if (granted.granted != null) grant = { amount: granted.granted, day: granted.day };
-    }
+    const granted = await grantIfNeeded(viewerRow);
+    viewer = granted.user;
+    if (granted.granted != null) grant = { amount: granted.granted, day: granted.day };
   }
-  const open = await rows("SELECT * FROM rounds WHERE status = 'open' ORDER BY starts_at ASC") as unknown as RoundRow[];
-  const freshViewer = viewerRow ? await userById(viewerRow.id) : null;
+  const [card, rounds] = await Promise.all([
+    viewer ? toViewer(viewer) : Promise.resolve(null),
+    Promise.all(open.map((round) => toRound(round, now, viewer))),
+  ]);
   return {
     now,
     serverAddress: serverAccount().address,
-    nansen: await nansenStatus(now),
-    viewer: freshViewer ? await toViewer(freshViewer) : null,
-    referralRequired: Number((await one("SELECT COUNT(*) AS n FROM users"))?.n ?? 0) > 0,
+    nansen,
+    viewer: card,
+    referralRequired: Number(population?.n ?? 0) > 0,
     grant,
-    rounds: await Promise.all(open.map((round) => toRound(round, now, freshViewer))),
+    rounds,
   };
 }
 

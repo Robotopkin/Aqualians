@@ -4,60 +4,90 @@ import { useEffect, useState } from "react";
 import SeaBackground from "@/components/SeaBackground";
 import SiteHeader from "@/components/SiteHeader";
 import ScrollFrame from "@/components/ScrollFrame";
+import TideLoader from "@/components/TideLoader";
 import { useSea } from "@/components/useSea";
 import { formatAura } from "@/lib/format";
 import type { LeaderboardBoard, ReferralRow, TideResult } from "@/lib/types";
 
+async function readJson<T>(response: Response): Promise<T & { error?: string }> {
+  const text = await response.text();
+  if (!text) throw new Error("The sea did not respond");
+  try {
+    return JSON.parse(text) as T & { error?: string };
+  } catch {
+    throw new Error("The sea did not respond");
+  }
+}
+
 export default function ProfilePage() {
-  const { state, error, load } = useSea();
+  const { state, error, load, ready } = useSea();
   const [games, setGames] = useState<TideResult[] | null>(null);
   const [note, setNote] = useState("");
   const [origin, setOrigin] = useState("");
-  const [code, setCode] = useState("");
   const [rows, setRows] = useState<ReferralRow[] | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardBoard | null>(null);
+  const [panelsReady, setPanelsReady] = useState(false);
+  const viewerKey = state?.viewer?.address ?? "";
 
   useEffect(() => {
     setOrigin(window.location.origin);
   }, []);
 
   useEffect(() => {
-    if (!state?.viewer) {
+    if (!ready) return;
+    if (!viewerKey) {
       setGames(null);
       setRows(null);
       setLeaderboard(null);
+      setPanelsReady(true);
       return;
     }
-    void fetch("/api/profile", { cache: "no-store" })
-      .then(async (response) => {
-        const body = (await response.json()) as { games?: TideResult[]; error?: string };
+    let gone = false;
+    setPanelsReady(false);
+    void Promise.all([
+      fetch("/api/profile", { cache: "no-store" }).then(async (response) => {
+        const body = await readJson<{ games?: TideResult[] }>(response);
         if (!response.ok) throw new Error(body.error || "Could not load the profile");
-        setGames(body.games ?? []);
+        return body.games ?? [];
+      }),
+      fetch("/api/referrals", { cache: "no-store" }).then(async (response) => {
+        const body = await readJson<{ rows?: ReferralRow[] }>(response);
+        if (!response.ok) throw new Error(body.error || "Could not load referrals");
+        return body.rows ?? [];
+      }),
+      fetch("/api/leaderboard", { cache: "no-store" }).then(async (response) => {
+        const body = await readJson<LeaderboardBoard>(response);
+        if (!response.ok) throw new Error(body.error || "Could not load leaderboard");
+        return body;
+      }),
+    ])
+      .then(([nextGames, nextRows, nextBoard]) => {
+        if (gone) return;
+        setGames(nextGames);
+        setRows(nextRows);
+        setLeaderboard(nextBoard);
         setNote("");
       })
-      .catch((err: unknown) => setNote(err instanceof Error ? err.message : "Could not load the profile"));
-    void fetch("/api/referrals", { cache: "no-store" })
-      .then(async (response) => {
-        const body = (await response.json()) as { code?: string; rows?: ReferralRow[]; error?: string };
-        if (!response.ok) throw new Error(body.error || "Could not load referrals");
-        setCode(body.code ?? "");
-        setRows(body.rows ?? []);
+      .catch((err: unknown) => {
+        if (gone) return;
+        setNote(err instanceof Error ? err.message : "Could not load the profile");
+        setGames((current) => current ?? []);
+        setRows((current) => current ?? []);
       })
-      .catch((err: unknown) => setNote(err instanceof Error ? err.message : "Could not load referrals"));
-    void fetch("/api/leaderboard", { cache: "no-store" })
-      .then(async (response) => {
-        const body = (await response.json()) as LeaderboardBoard & { error?: string };
-        if (!response.ok) throw new Error(body.error || "Could not load leaderboard");
-        setLeaderboard(body);
-      })
-      .catch((err: unknown) => setNote(err instanceof Error ? err.message : "Could not load leaderboard"));
-  }, [state?.viewer]);
+      .finally(() => {
+        if (!gone) setPanelsReady(true);
+      });
+    return () => {
+      gone = true;
+    };
+  }, [ready, viewerKey]);
 
-  const link = code && origin ? `${origin}/?ref=${code}` : "";
+  const link = state?.viewer && origin ? `${origin}/?ref=${state.viewer.referralCode}` : "";
 
   return (
     <>
       <SeaBackground />
+      {ready && (!state?.viewer || panelsReady) ? null : <TideLoader />}
       <main className="page profile-page">
         <SiteHeader
           viewer={state?.viewer ?? null}
@@ -167,7 +197,9 @@ export default function ProfilePage() {
                     </ol>
                   </>
                 ) : (
-                  <p className="meta">The leaderboard appears after sign in.</p>
+                  <p className="meta">
+                    {state?.viewer ? "The leaderboard is still settling." : "The leaderboard appears after sign in."}
+                  </p>
                 )}
               </div>
             </article>

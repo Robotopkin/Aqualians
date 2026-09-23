@@ -10,6 +10,7 @@ import SeaBackground from "./SeaBackground";
 import SiteHeader from "./SiteHeader";
 import ScrollFrame from "./ScrollFrame";
 import TideNum from "./TideNum";
+import TideLoader from "./TideLoader";
 import { useSea } from "./useSea";
 import { signWallet } from "./wallet";
 
@@ -33,7 +34,7 @@ function formatRemain(ms: number) {
 }
 
 export default function Game() {
-  const { state, serverNow, error, setError, load } = useSea();
+  const { state, serverNow, error, setError, load, ready } = useSea();
   const [busy, setBusy] = useState(false);
   const [slips, setSlips] = useState<Record<string, Record<string, { amount: string; rank: number }>>>({});
 
@@ -94,6 +95,7 @@ export default function Game() {
   return (
     <>
       <SeaBackground />
+      {ready ? null : <TideLoader />}
       <main className="page">
         <SiteHeader
           viewer={state?.viewer ?? null}
@@ -129,10 +131,10 @@ export default function Game() {
               onCast={() => void cast(round)}
             />
           ))}
-          {!state ? (
+          {ready && !state ? (
             <div className="scroll-wrap">
               <ScrollFrame />
-              <article className="card">Listening to the tide…</article>
+              <article className="card">The tide is quiet. Refresh in a moment.</article>
             </div>
           ) : null}
         </section>
