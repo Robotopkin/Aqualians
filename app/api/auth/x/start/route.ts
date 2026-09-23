@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   );
   response.cookies.set(
     "aurasea_pkce",
-    seal({ verifier: pkce.verifier, state: pkce.state, exp: Date.now() + 10 * 60 * 1000 }),
+    await seal({ verifier: pkce.verifier, state: pkce.state, exp: Date.now() + 10 * 60 * 1000 }),
     cookieOptions(600),
   );
   return response;

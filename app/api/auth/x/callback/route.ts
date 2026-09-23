@@ -29,7 +29,7 @@ export async function GET(request: Request) {
   const state = url.searchParams.get("state");
   if (!code || !state) return fail("state");
   const jar = await cookies();
-  const pkce = unseal<{ verifier: string; state: string; exp: number }>(jar.get("aurasea_pkce")?.value);
+  const pkce = await unseal<{ verifier: string; state: string; exp: number }>(jar.get("aurasea_pkce")?.value);
   if (!pkce || pkce.state !== state || pkce.exp < Date.now()) return fail("state");
   try {
     const profile = await exchangeXCode({ code, verifier: pkce.verifier, redirectUri: xCallbackUrl(url.origin) });
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
     response.cookies.set("aurasea_pkce", "", cookieOptions(0));
     response.cookies.set(
       "aurasea_x",
-      seal({ ...profile, exp: Date.now() + 30 * 60 * 1000 }),
+      await seal({ ...profile, exp: Date.now() + 30 * 60 * 1000 }),
       cookieOptions(30 * 60),
     );
     return response;

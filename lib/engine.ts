@@ -14,7 +14,7 @@ import { cachedReadings, demoFill, fetchSector, nansenStatus, writeCache } from 
 import { settle } from "./payout";
 import { classifyWallet } from "./roles";
 import { rankCategories, relativeChange } from "./score";
-import { serverAccount, signReceipt } from "./server-wallet";
+import { ensureServerAccount, serverAccount, signReceipt } from "./server-wallet";
 import { activeTxWindow, activeVolumeWindow, phaseOf, utcDayKey } from "./time";
 import type { BetLine, CategoryId, Kind, LeaderboardBoard, Mode, PublicState, Reading, ReferralRow, Role, RoleEvidence, StoredBet, TideResult } from "./types";
 
@@ -45,7 +45,7 @@ const globalForBoot = globalThis as unknown as {
 export function boot() {
   if (globalForBoot.auraseaBoot) return globalForBoot.auraseaReady ?? Promise.resolve();
   globalForBoot.auraseaBoot = true;
-  const ready = runTick();
+  const ready = ensureServerAccount().then(() => runTick());
   globalForBoot.auraseaReady = ready;
   globalForBoot.auraseaTimer = setInterval(() => void runTick(), 20_000);
   return ready;
@@ -57,21 +57,21 @@ export function runTick() {
 
 async function tick() {
   const now = Date.now();
-  rollPlaces();
-  ensureRound("volume", activeVolumeWindow(now));
-  ensureRound("tx", activeTxWindow(now));
+  await rollPlaces();
+  await ensureRound("volume", activeVolumeWindow(now));
+  await ensureRound("tx", activeTxWindow(now));
   await refreshReadings(now);
-  const due = rows("SELECT * FROM rounds WHERE status = 'open' AND ends_at <= ?", now) as unknown as RoundRow[];
+  const due = await rows("SELECT * FROM rounds WHERE status = 'open' AND ends_at <= ?", now) as unknown as RoundRow[];
   for (const round of due) await settleRound(round, now);
 }
 
-function ensureRound(kind: Kind, window: { start: number; betsClose: number; end: number }) {
+async function ensureRound(kind: Kind, window: { start: number; betsClose: number; end: number }) {
   const id = `${kind}:${new Date(window.start).toISOString()}`;
-  const existing = one("SELECT id FROM rounds WHERE id = ?", id);
+  const existing = await one("SELECT id FROM rounds WHERE id = ?", id);
   if (existing) return;
   const setup = pickRoundSetup(id);
   const place = pickPlace(id);
-  run(
+  await run(
     `INSERT INTO rounds(id, kind, mode, categories, starts_at, bets_close_at, ends_at, status, place)
      VALUES(?, ?, ?, ?, ?, ?, ?, 'open', ?)`,
     id,
@@ -85,35 +85,35 @@ function ensureRound(kind: Kind, window: { start: number; betsClose: number; end
   );
 }
 
-function askedPlace(round: RoundRow) {
+async function askedPlace(round: RoundRow) {
   if (round.mode === "stability") {
-    run("UPDATE rounds SET mode = 'movement', place = 4 WHERE id = ?", round.id);
+    await run("UPDATE rounds SET mode = 'movement', place = 4 WHERE id = ?", round.id);
     round.mode = "movement";
     round.place = 4;
     return 4;
   }
   if (round.place != null && round.place >= 1 && round.place <= 4) return round.place;
   const place = pickPlace(round.id);
-  run("UPDATE rounds SET place = ? WHERE id = ?", place, round.id);
+  await run("UPDATE rounds SET place = ? WHERE id = ?", place, round.id);
   round.place = place;
   return place;
 }
 
-function rollPlaces() {
-  if (metaGet("place_roll_v2")) return;
-  const open = rows("SELECT id, mode FROM rounds WHERE status = 'open'") as { id: string; mode: string }[];
+async function rollPlaces() {
+  if (await metaGet("place_roll_v2")) return;
+  const open = await rows("SELECT id, mode FROM rounds WHERE status = 'open'") as { id: string; mode: string }[];
   for (const round of open) {
     if (round.mode === "stability") {
-      run("UPDATE rounds SET mode = 'movement', place = 4 WHERE id = ?", round.id);
+      await run("UPDATE rounds SET mode = 'movement', place = 4 WHERE id = ?", round.id);
     } else if (round.mode === "movement") {
-      run("UPDATE rounds SET place = ? WHERE id = ?", pickPlace(String(round.id)), String(round.id));
+      await run("UPDATE rounds SET place = ? WHERE id = ?", pickPlace(String(round.id)), String(round.id));
     }
   }
-  metaSet("place_roll_v2", "1");
+  await metaSet("place_roll_v2", "1");
 }
 
 async function refreshReadings(now: number) {
-  const open = rows("SELECT * FROM rounds WHERE status = 'open'") as unknown as RoundRow[];
+  const open = await rows("SELECT * FROM rounds WHERE status = 'open'") as unknown as RoundRow[];
   const due = open.filter((round) => !round.baseline_json || round.ends_at <= now);
   if (!due.length) return;
   const needed = new Set<CategoryId>();
@@ -124,22 +124,22 @@ async function refreshReadings(now: number) {
   if (!categoriesDue.length) return;
 
   if (!nansenKey()) {
-    demoFill(categoriesDue, now);
-    metaSet("last_poll_at", String(now));
-    applyCache(due, "demo", now);
+    await demoFill(categoriesDue, now);
+    await metaSet("last_poll_at", String(now));
+    await applyCache(due, "demo", now);
     return;
   }
 
   for (const category of categoriesDue) {
     const reading = await fetchSector(category);
-    if (reading) writeCache(category, reading, "live", now);
+    if (reading) await writeCache(category, reading, "live", now);
   }
-  metaSet("last_poll_at", String(now));
-  applyCache(due, "live", now);
+  await metaSet("last_poll_at", String(now));
+  await applyCache(due, "live", now);
 }
 
-function applyCache(open: RoundRow[], source: "demo" | "live", now: number) {
-  const cache = new Map(cachedReadings().filter((row) => row.source === source).map((row) => [row.category, row]));
+async function applyCache(open: RoundRow[], source: "demo" | "live", now: number) {
+  const cache = new Map((await cachedReadings()).filter((row) => row.source === source).map((row) => [row.category, row]));
   for (const round of open) {
     const categories = JSON.parse(round.categories) as CategoryId[];
     const baseline = parseReadings(round.baseline_json);
@@ -161,7 +161,7 @@ function applyCache(open: RoundRow[], source: "demo" | "live", now: number) {
     }
     if (!touched && !switching) continue;
     const baselineAt = switching || !round.baseline_at ? now : round.baseline_at;
-    run(
+    await run(
       `UPDATE rounds
        SET baseline_json = ?, latest_json = ?, baseline_at = ?, latest_at = ?, reading_source = ?
        WHERE id = ?`,
@@ -190,10 +190,10 @@ async function settleRound(round: RoundRow, now: number) {
   const latest = parseReadings(round.latest_json);
   const metric = round.kind === "volume" ? "volume" : "tx";
   const missing = categories.some((id) => baseline[id] == null || latest[id] == null);
-  const bets = loadBets(round.id);
+  const bets = await loadBets(round.id);
   if (missing) {
     await payRefunds(round, bets, "not enough readings, stakes returned");
-    run(
+    await run(
       "UPDATE rounds SET status = 'settled', result_json = ? WHERE id = ?",
       JSON.stringify({ refund: true, reason: "missing readings" }),
       round.id,
@@ -204,11 +204,11 @@ async function settleRound(round: RoundRow, now: number) {
     category,
     change: relativeChange(baseline[category]![metric], latest[category]![metric]),
   }));
-  askedPlace(round);
+  await askedPlace(round);
   const mode: Mode = round.mode === "stability" ? "movement" : round.mode;
   const settlement = settle({ mode, changes, bets });
   for (const payout of settlement.payouts) {
-    const user = userById(payout.userId);
+    const user = await userById(payout.userId);
     if (!user) continue;
     await credit(user, payout.stakeBack + payout.profit, settlement.refund ? "round-refund" : "payout", round.id, {
       stake: payout.stakeBack,
@@ -216,12 +216,12 @@ async function settleRound(round: RoundRow, now: number) {
     });
   }
   for (const bonus of settlement.referrals) {
-    const user = userById(bonus.userId);
+    const user = await userById(bonus.userId);
     if (!user) continue;
     await credit(user, bonus.amount, "referral", round.id, { fromUserId: bonus.fromUserId });
   }
   for (const rank of settlement.ranks) {
-    run(
+    await run(
       `INSERT INTO category_history(category, metric, change_pct, rank, round_id, settled_at)
        VALUES(?, ?, ?, ?, ?, ?)`,
       rank.category,
@@ -232,7 +232,7 @@ async function settleRound(round: RoundRow, now: number) {
       now,
     );
   }
-  run(
+  await run(
     "UPDATE rounds SET status = 'settled', result_json = ? WHERE id = ?",
     JSON.stringify({ refund: settlement.refund, reason: settlement.reason, ranks: settlement.ranks }),
     round.id,
@@ -243,7 +243,7 @@ async function payRefunds(round: RoundRow, bets: StoredBet[], reason: string) {
   const byUser = new Map<number, number>();
   for (const bet of bets) byUser.set(bet.userId, (byUser.get(bet.userId) ?? 0) + bet.amount);
   for (const [userId, amount] of byUser) {
-    const user = userById(userId);
+    const user = await userById(userId);
     if (!user) continue;
     await credit(user, amount, "round-refund", round.id, { reason });
   }
@@ -263,17 +263,17 @@ type UserRow = {
   created_at: string;
 };
 
-function userById(id: number) {
-  return one("SELECT * FROM users WHERE id = ?", id) as UserRow | null;
+async function userById(id: number) {
+  return (await one("SELECT * FROM users WHERE id = ?", id)) as UserRow | null;
 }
 
-function loadBets(roundId: string): StoredBet[] {
-  return rows(
+async function loadBets(roundId: string): Promise<StoredBet[]> {
+  return (await rows(
     `SELECT b.id, b.user_id, b.category, b.rank, b.amount, b.role, u.referrer_id
      FROM bets b JOIN users u ON u.id = b.user_id
      WHERE b.round_id = ?`,
     roundId,
-  ).map((row) => ({
+  )).map((row) => ({
     id: Number(row.id),
     userId: Number(row.user_id),
     category: String(row.category) as CategoryId,
@@ -302,8 +302,8 @@ async function credit(
     ref,
     nonce,
   });
-  run("UPDATE users SET aura = ? WHERE id = ?", next, user.id);
-  run(
+  await run("UPDATE users SET aura = ? WHERE id = ?", next, user.id);
+  await run(
     `INSERT INTO ledger(user_id, amount, reason, ref, message, signature, created_at, payload)
      VALUES(?, ?, ?, ?, ?, ?, ?, ?)`,
     user.id,
@@ -320,8 +320,8 @@ async function credit(
 
 export async function createNonce() {
   const nonce = randomBytes(16).toString("hex");
-  run("DELETE FROM nonces WHERE created_at < ?", Date.now() - 15 * 60 * 1000);
-  run("INSERT INTO nonces(nonce, created_at) VALUES(?, ?)", nonce, Date.now());
+  await run("DELETE FROM nonces WHERE created_at < ?", Date.now() - 15 * 60 * 1000);
+  await run("INSERT INTO nonces(nonce, created_at) VALUES(?, ?)", nonce, Date.now());
   return nonce;
 }
 
@@ -339,26 +339,26 @@ export async function enterSea(input: {
     const handle = normalizeHandle(input.xHandle);
     if (!address) throw new Error("An EVM wallet is required");
     if (!validHandle(handle)) throw new Error("X handle: 1–15 letters, numbers, or _");
-    const nonceRow = one("SELECT nonce FROM nonces WHERE nonce = ?", input.nonce);
+    const nonceRow = await one("SELECT nonce FROM nonces WHERE nonce = ?", input.nonce);
     if (!nonceRow) throw new Error("Signature expired. Request a new one");
-    run("DELETE FROM nonces WHERE nonce = ?", input.nonce);
+    await run("DELETE FROM nonces WHERE nonce = ?", input.nonce);
     const referral = input.referral.trim().toLowerCase();
     const message = registerMessage({ address, xHandle: handle, referral, nonce: input.nonce });
     const valid = await verifyMessage({ address, message, signature: input.signature });
     if (!valid) throw new Error("Signature does not match");
-    const existing = one("SELECT * FROM users WHERE address = ?", address.toLowerCase()) as UserRow | null;
+    const existing = await one("SELECT * FROM users WHERE address = ?", address.toLowerCase()) as UserRow | null;
     if (existing) {
       if (existing.x_handle !== handle) throw new Error(`This wallet is already linked to @${existing.x_handle}`);
       const granted = await grantIfNeeded(existing);
       return {
         kind: "login" as const,
-        token: openSession(existing.id),
+        token: await openSession(existing.id),
         role: existing.role,
         grant: granted.granted,
         day: granted.day,
       };
     }
-    const taken = one("SELECT id FROM users WHERE x_handle = ?", handle);
+    const taken = await one("SELECT id FROM users WHERE x_handle = ?", handle);
     if (taken) throw new Error("That X handle is already in the sea");
     return { kind: "new" as const, address, handle, referral, message, signature: input.signature };
   });
@@ -385,24 +385,24 @@ export async function enterSea(input: {
   if (input.followers != null) classified.evidence.xFollowers = input.followers;
 
   return withLock(async () => {
-    const again = one("SELECT id FROM users WHERE address = ?", gate.address.toLowerCase());
+    const again = await one("SELECT id FROM users WHERE address = ?", gate.address.toLowerCase());
     if (again) throw new Error("This wallet already entered. Refresh the page");
-    const seaHasPlayers = Number(one("SELECT COUNT(*) AS n FROM users")?.n ?? 0) > 0;
+    const seaHasPlayers = Number((await one("SELECT COUNT(*) AS n FROM users"))?.n ?? 0) > 0;
     if (seaHasPlayers && (!gate.referral || gate.referral === "-")) {
       throw new Error("A referral code is required");
     }
     let referrerId: number | null = null;
     if (gate.referral && gate.referral !== "-") {
-      const referrer = one("SELECT id, address FROM users WHERE referral_code = ?", gate.referral) as
+      const referrer = await one("SELECT id, address FROM users WHERE referral_code = ?", gate.referral) as
         | { id: number; address: string }
         | null;
       if (!referrer) throw new Error("Referral code not found");
       if (referrer.address === gate.address.toLowerCase()) throw new Error("You cannot refer yourself");
       referrerId = referrer.id;
     }
-    const takenX = one("SELECT id FROM users WHERE x_user_id = ?", input.xUserId);
+    const takenX = await one("SELECT id FROM users WHERE x_user_id = ?", input.xUserId);
     if (takenX) throw new Error("That X account is already in the sea");
-    const idRow = run(
+    const idRow = await run(
       `INSERT INTO users(address, x_handle, x_user_id, role, evidence, aura, referrer_id, referral_code, register_message, register_signature, last_grant_on, created_at)
        VALUES(?, ?, ?, ?, ?, 0, ?, ?, ?, ?, NULL, ?)`,
       gate.address.toLowerCase(),
@@ -411,28 +411,28 @@ export async function enterSea(input: {
       classified.role,
       JSON.stringify(classified.evidence),
       referrerId,
-      referralCode(gate.handle),
+      await referralCode(gate.handle),
       gate.message,
       gate.signature,
       new Date().toISOString(),
     );
-    const user = userById(Number(idRow.lastInsertRowid));
+    const user = await userById(Number(idRow.lastInsertRowid));
     if (!user) throw new Error("Could not create the profile");
     const granted = await grantIfNeeded(user, true);
-    return { token: openSession(user.id), created: true, role: user.role, grant: granted.granted, day: granted.day };
+    return { token: await openSession(user.id), created: true, role: user.role, grant: granted.granted, day: granted.day };
   });
 }
 
-function referralCode(handle: string) {
+async function referralCode(handle: string) {
   const base = normalizeHandle(handle);
-  const clash = one("SELECT id FROM users WHERE referral_code = ?", base);
+  const clash = await one("SELECT id FROM users WHERE referral_code = ?", base);
   if (!clash) return base;
   return `${base}${randomBytes(1).toString("hex")}`;
 }
 
-function openSession(userId: number) {
+async function openSession(userId: number) {
   const token = randomBytes(24).toString("hex");
-  run("INSERT INTO sessions(token, user_id, created_at) VALUES(?, ?, ?)", token, userId, new Date().toISOString());
+  await run("INSERT INTO sessions(token, user_id, created_at) VALUES(?, ?, ?)", token, userId, new Date().toISOString());
   return token;
 }
 
@@ -440,17 +440,17 @@ export async function grantIfNeeded(user: UserRow, first = false) {
   const today = utcDayKey(Date.now());
   const amount = user.role === "whale" ? WHALE_DAILY_AURA : DAILY_AURA;
   if (user.last_grant_on === today) return { user, granted: null as number | null, day: today };
-  const updated = run(
+  const updated = await run(
     "UPDATE users SET last_grant_on = ? WHERE id = ? AND (last_grant_on IS NULL OR last_grant_on < ?)",
     today,
     user.id,
     today,
   );
-  if (Number(updated.changes) !== 1) return { user: userById(user.id) ?? user, granted: null as number | null, day: today };
-  const fresh = userById(user.id);
+  if (Number(updated.changes) !== 1) return { user: (await userById(user.id)) ?? user, granted: null as number | null, day: today };
+  const fresh = await userById(user.id);
   if (!fresh) return { user, granted: null as number | null, day: today };
   await credit(fresh, amount, first ? "register-grant" : "daily-grant", today, {});
-  return { user: userById(user.id) ?? fresh, granted: amount, day: today };
+  return { user: (await userById(user.id)) ?? fresh, granted: amount, day: today };
 }
 
 export async function placeBets(input: {
@@ -461,13 +461,13 @@ export async function placeBets(input: {
   nonce: string;
 }) {
   return withLock(async () => {
-    const user = sessionUser(input.token);
+    const user = await sessionUser(input.token);
     if (!user) throw new Error("Enter the sea first");
-    const round = one("SELECT * FROM rounds WHERE id = ?", input.roundId) as RoundRow | null;
+    const round = await one("SELECT * FROM rounds WHERE id = ?", input.roundId) as RoundRow | null;
     if (!round || round.status !== "open") throw new Error("This round is already closed");
     if (Date.now() >= round.bets_close_at) throw new Error("Betting is closed");
     const categories = JSON.parse(round.categories) as string[];
-    const place = askedPlace(round);
+    const place = await askedPlace(round);
     const lines = input.lines.filter((line) => line.amount > 0);
     if (!lines.length) throw new Error("Enter a stake");
     const seen = new Set<string>();
@@ -478,9 +478,9 @@ export async function placeBets(input: {
       if (seen.has(line.category)) throw new Error("One stake per category");
       seen.add(line.category);
     }
-    const nonceRow = one("SELECT nonce FROM nonces WHERE nonce = ?", input.nonce);
+    const nonceRow = await one("SELECT nonce FROM nonces WHERE nonce = ?", input.nonce);
     if (!nonceRow) throw new Error("Signature expired. Request a new one");
-    run("DELETE FROM nonces WHERE nonce = ?", input.nonce);
+    await run("DELETE FROM nonces WHERE nonce = ?", input.nonce);
     const address = checksum(user.address);
     if (!address) throw new Error("Profile wallet is invalid");
     const message = betMessage({ address, roundId: round.id, lines, nonce: input.nonce });
@@ -492,16 +492,16 @@ export async function placeBets(input: {
     await credit(user, -next, "bet-lock", round.id, { lines });
     const nowIso = new Date().toISOString();
     for (const line of lines) {
-      const existing = one(
+      const existing = await one(
         "SELECT id, amount FROM bets WHERE round_id = ? AND user_id = ? AND category = ?",
         round.id,
         user.id,
         line.category,
       ) as { id: number; amount: number } | null;
       if (existing) {
-        run("UPDATE bets SET amount = ? WHERE id = ?", Number(existing.amount) + line.amount, existing.id);
+        await run("UPDATE bets SET amount = ? WHERE id = ?", Number(existing.amount) + line.amount, existing.id);
       } else {
-        run(
+        await run(
           `INSERT INTO bets(round_id, user_id, category, rank, amount, role, created_at)
            VALUES(?, ?, ?, ?, ?, ?, ?)`,
           round.id,
@@ -514,13 +514,13 @@ export async function placeBets(input: {
         );
       }
     }
-    return userById(user.id);
+    return await userById(user.id);
   });
 }
 
-function sessionUser(token: string) {
+async function sessionUser(token: string) {
   if (!token) return null;
-  return one(
+  return await one(
     `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ?`,
     token,
   ) as UserRow | null;
@@ -529,7 +529,7 @@ function sessionUser(token: string) {
 export async function publicState(token: string | null): Promise<PublicState> {
   await boot();
   const now = Date.now();
-  let viewerRow = token ? sessionUser(token) : null;
+  let viewerRow = token ? await sessionUser(token) : null;
   let grant: PublicState["grant"] = null;
   if (viewerRow) {
     const granted = await withLock(async () => (viewerRow ? grantIfNeeded(viewerRow) : null));
@@ -538,20 +538,20 @@ export async function publicState(token: string | null): Promise<PublicState> {
       if (granted.granted != null) grant = { amount: granted.granted, day: granted.day };
     }
   }
-  const open = rows("SELECT * FROM rounds WHERE status = 'open' ORDER BY starts_at ASC") as unknown as RoundRow[];
-  const freshViewer = viewerRow ? userById(viewerRow.id) : null;
+  const open = await rows("SELECT * FROM rounds WHERE status = 'open' ORDER BY starts_at ASC") as unknown as RoundRow[];
+  const freshViewer = viewerRow ? await userById(viewerRow.id) : null;
   return {
     now,
     serverAddress: serverAccount().address,
-    nansen: nansenStatus(now),
-    viewer: freshViewer ? toViewer(freshViewer) : null,
-    referralRequired: Number(one("SELECT COUNT(*) AS n FROM users")?.n ?? 0) > 0,
+    nansen: await nansenStatus(now),
+    viewer: freshViewer ? await toViewer(freshViewer) : null,
+    referralRequired: Number((await one("SELECT COUNT(*) AS n FROM users"))?.n ?? 0) > 0,
     grant,
-    rounds: open.map((round) => toRound(round, now, freshViewer)),
+    rounds: await Promise.all(open.map((round) => toRound(round, now, freshViewer))),
   };
 }
 
-function toViewer(user: UserRow): PublicState["viewer"] {
+async function toViewer(user: UserRow): Promise<PublicState["viewer"]> {
   let evidence: RoleEvidence;
   try {
     evidence = JSON.parse(user.evidence) as RoleEvidence;
@@ -567,10 +567,10 @@ function toViewer(user: UserRow): PublicState["viewer"] {
       note: "",
     };
   }
-  const receipts = rows(
+  const receipts = (await rows(
     "SELECT amount, reason, signature, created_at FROM ledger WHERE user_id = ? ORDER BY id DESC LIMIT 8",
     user.id,
-  ).map((row) => ({
+  )).map((row) => ({
     amount: Number(row.amount),
     reason: String(row.reason),
     signature: String(row.signature),
@@ -587,8 +587,8 @@ function toViewer(user: UserRow): PublicState["viewer"] {
   };
 }
 
-function toRound(round: RoundRow, now: number, viewer: UserRow | null) {
-  const place = askedPlace(round);
+async function toRound(round: RoundRow, now: number, viewer: UserRow | null) {
+  const place = await askedPlace(round);
   const categories = JSON.parse(round.categories) as CategoryId[];
   const baseline = parseReadings(round.baseline_json);
   const latest = parseReadings(round.latest_json);
@@ -603,7 +603,7 @@ function toRound(round: RoundRow, now: number, viewer: UserRow | null) {
   const ranked = known.length === categories.length ? rankCategories(mode, known) : [];
   const changeOf = new Map(known.map((row) => [row.category, row.change]));
   const rankOf = new Map(ranked.map((row) => [row.category, row.rank]));
-  const bets = loadBets(round.id);
+  const bets = await loadBets(round.id);
   const tide = shrimpTide(bets, categories);
   const spotlight = whaleSpotlight(bets, categories);
   const poolTotal = bets.reduce((sum, bet) => sum + bet.amount, 0);
@@ -630,9 +630,9 @@ function toRound(round: RoundRow, now: number, viewer: UserRow | null) {
     betCount: bets.length,
     shrimpVeil: showShrimp ? { veiled: tide.veiled, bets: tide.bets } : null,
     myBets,
-    categories: categories.map((id) => {
+    categories: await Promise.all(categories.map(async (id) => {
       const spec = categoryById(id);
-      const yesterday = showDolphin ? yesterdayFor(id, metric, round.starts_at) : null;
+      const yesterday = showDolphin ? await yesterdayFor(id, metric, round.starts_at) : null;
       return {
         id,
         title: spec?.title ?? id,
@@ -642,12 +642,12 @@ function toRound(round: RoundRow, now: number, viewer: UserRow | null) {
         yesterday,
         shrimpShare: showShrimp ? (tide.shares[id] ?? 0) : null,
       };
-    }),
+    })),
   };
 }
 
-function yesterdayFor(category: string, metric: string, _before: number) {
-  const row = one(
+async function yesterdayFor(category: string, metric: string, _before: number) {
+  const row = await one(
     `SELECT change_pct, rank FROM category_history
      WHERE category = ? AND metric = ?
      ORDER BY settled_at DESC LIMIT 1`,
@@ -658,44 +658,44 @@ function yesterdayFor(category: string, metric: string, _before: number) {
   return { changePct: Number(row.change_pct), rank: Number(row.rank) };
 }
 
-export function logout(token: string) {
-  if (token) run("DELETE FROM sessions WHERE token = ?", token);
+export async function logout(token: string) {
+  if (token) await run("DELETE FROM sessions WHERE token = ?", token);
 }
 
-export function walletKnown(address: string) {
+export async function walletKnown(address: string) {
   const checksummed = checksum(address);
   if (!checksummed) return false;
-  return Boolean(one("SELECT id FROM users WHERE address = ?", checksummed.toLowerCase()));
+  return Boolean(await one("SELECT id FROM users WHERE address = ?", checksummed.toLowerCase()));
 }
 
 export async function loginSea(input: { address: string; signature: `0x${string}`; nonce: string }) {
   return withLock(async () => {
     const address = checksum(input.address);
     if (!address) throw new Error("An EVM wallet is required");
-    const nonceRow = one("SELECT nonce FROM nonces WHERE nonce = ?", input.nonce);
+    const nonceRow = await one("SELECT nonce FROM nonces WHERE nonce = ?", input.nonce);
     if (!nonceRow) throw new Error("Signature expired. Request a new one");
-    run("DELETE FROM nonces WHERE nonce = ?", input.nonce);
+    await run("DELETE FROM nonces WHERE nonce = ?", input.nonce);
     const message = loginMessage({ address, nonce: input.nonce });
     const valid = await verifyMessage({ address, message, signature: input.signature });
     if (!valid) throw new Error("Signature does not match");
-    const existing = one("SELECT * FROM users WHERE address = ?", address.toLowerCase()) as UserRow | null;
+    const existing = await one("SELECT * FROM users WHERE address = ?", address.toLowerCase()) as UserRow | null;
     if (!existing) throw new Error("This wallet has not entered yet");
     const granted = await grantIfNeeded(existing);
-    return { token: openSession(existing.id), grant: granted.granted, day: granted.day, role: existing.role };
+    return { token: await openSession(existing.id), grant: granted.granted, day: granted.day, role: existing.role };
   });
 }
 
-export function gamesFor(token: string): TideResult[] | null {
-  const user = sessionUser(token);
+export async function gamesFor(token: string): Promise<TideResult[] | null> {
+  const user = await sessionUser(token);
   if (!user) return null;
-  const betRows = rows(
+  const betRows = await rows(
     `SELECT r.id, r.kind, r.mode, r.place, r.starts_at, r.status, r.result_json, b.category, b.amount, b.rank
      FROM bets b JOIN rounds r ON r.id = b.round_id
      WHERE b.user_id = ?
      ORDER BY r.starts_at ASC, b.id ASC`,
     user.id,
   );
-  const ledgerRows = rows(
+  const ledgerRows = await rows(
     "SELECT ref, reason, payload FROM ledger WHERE user_id = ? AND reason IN ('payout', 'round-refund')",
     user.id,
   );
@@ -768,10 +768,10 @@ export function gamesFor(token: string): TideResult[] | null {
   return [...grouped.values()];
 }
 
-export function referralsFor(token: string): { code: string; rows: ReferralRow[] } | null {
-  const user = sessionUser(token);
+export async function referralsFor(token: string): Promise<{ code: string; rows: ReferralRow[] } | null> {
+  const user = await sessionUser(token);
   if (!user) return null;
-  const people = rows(
+  const people = await rows(
     `SELECT u.id, u.x_handle, u.created_at
      FROM users u
      WHERE u.referrer_id = ?
@@ -786,7 +786,7 @@ export function referralsFor(token: string): { code: string; rows: ReferralRow[]
       joinedAt: String(row.created_at),
     });
   }
-  const bonuses = rows("SELECT amount, payload FROM ledger WHERE user_id = ? AND reason = 'referral'", user.id);
+  const bonuses = await rows("SELECT amount, payload FROM ledger WHERE user_id = ? AND reason = 'referral'", user.id);
   for (const row of bonuses) {
     if (!row.payload) continue;
     try {
@@ -819,13 +819,13 @@ type CachedLeaderboard = {
   rows: CachedLeaderboardRow[];
 };
 
-export function leaderboardFor(token: string): LeaderboardBoard | null {
-  const user = sessionUser(token);
+export async function leaderboardFor(token: string): Promise<LeaderboardBoard | null> {
+  const user = await sessionUser(token);
   if (!user) return null;
   const now = Date.now();
   let cached: CachedLeaderboard | null = null;
   try {
-    cached = JSON.parse(metaGet("leaderboard_cache") ?? "null") as CachedLeaderboard | null;
+    cached = JSON.parse(await metaGet("leaderboard_cache") ?? "null") as CachedLeaderboard | null;
   } catch {
     cached = null;
   }
@@ -834,13 +834,13 @@ export function leaderboardFor(token: string): LeaderboardBoard | null {
   if (stale || missingViewer) {
     cached = {
       refreshedAt: now,
-      rows: rows("SELECT id, x_handle, aura FROM users ORDER BY aura DESC, id ASC").map((row) => ({
+      rows: (await rows("SELECT id, x_handle, aura FROM users ORDER BY aura DESC, id ASC")).map((row) => ({
         userId: Number(row.id),
         xHandle: String(row.x_handle),
         aura: Math.floor(Number(row.aura)),
       })),
     };
-    metaSet("leaderboard_cache", JSON.stringify(cached));
+    await metaSet("leaderboard_cache", JSON.stringify(cached));
   }
   const board = cached as CachedLeaderboard;
   const currentRank = Math.max(1, board.rows.findIndex((row) => row.userId === user.id) + 1);

@@ -10,7 +10,10 @@ export function useSea() {
 
   const load = useCallback(async () => {
     const response = await fetch("/api/state", { cache: "no-store" });
-    if (!response.ok) throw new Error("The sea did not respond");
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      throw new Error(body?.error || "The sea did not respond");
+    }
     const next = (await response.json()) as PublicState;
     setState(next);
     setNow(next.now);

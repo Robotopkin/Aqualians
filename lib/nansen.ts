@@ -22,9 +22,9 @@ export async function nansenPost(endpoint: string, body: unknown): Promise<CallR
     const rawCredits = response.headers.get("x-nansen-credits-used");
     const remaining = response.headers.get("x-nansen-credits-remaining");
     if (rawCredits && Number.isFinite(Number(rawCredits))) credits = Number(rawCredits);
-    if (remaining) metaSet("credits_remaining", remaining);
+    if (remaining) await metaSet("credits_remaining", remaining);
     const json = (await response.json().catch(() => null)) as unknown;
-    run(
+    await run(
       "INSERT INTO api_calls(endpoint, status, credits, created_at) VALUES(?, ?, ?, ?)",
       endpoint,
       status,
@@ -34,38 +34,38 @@ export async function nansenPost(endpoint: string, body: unknown): Promise<CallR
     if (!response.ok) {
       const message =
         json && typeof json === "object" && "message" in json ? String((json as { message: unknown }).message) : `HTTP ${status}`;
-      metaSet("last_error", message.slice(0, 240));
+      await metaSet("last_error", message.slice(0, 240));
       return { ok: false, status, body: json, error: message };
     }
-    metaSet("last_error", "");
+    await metaSet("last_error", "");
     return { ok: true, status, body: json, error: null };
   } catch (error) {
     const message = error instanceof Error ? error.message : "nansen request failed";
-    run(
+    await run(
       "INSERT INTO api_calls(endpoint, status, credits, created_at) VALUES(?, ?, ?, ?)",
       endpoint,
       status,
       credits,
       Date.now(),
     );
-    metaSet("last_error", message.slice(0, 240));
+    await metaSet("last_error", message.slice(0, 240));
     return { ok: false, status, body: null, error: message };
   }
 }
 
-export function callsToday(now = Date.now()) {
-  const row = one("SELECT COUNT(*) AS n FROM api_calls WHERE created_at >= ?", utcMidnight(now));
+export async function callsToday(now = Date.now()) {
+  const row = await one("SELECT COUNT(*) AS n FROM api_calls WHERE created_at >= ?", utcMidnight(now));
   return Number(row?.n ?? 0);
 }
 
-export function callsTotal() {
-  const row = one("SELECT COUNT(*) AS n FROM api_calls");
+export async function callsTotal() {
+  const row = await one("SELECT COUNT(*) AS n FROM api_calls");
   return Number(row?.n ?? 0);
 }
 
-export function boardCallsThisTick(now = Date.now()) {
+export async function boardCallsThisTick(now = Date.now()) {
   const budget = dailyBudget();
-  const used = callsToday(now);
+  const used = await callsToday(now);
   const room = budget - used;
   if (room <= 0) return 0;
   const elapsed = Math.max(1, now - utcMidnight(now));
@@ -75,8 +75,8 @@ export function boardCallsThisTick(now = Date.now()) {
   return Math.min(room, 8, Math.max(1, Math.ceil(behind)));
 }
 
-export function pollDue(now = Date.now()) {
-  const last = Number(metaGet("last_poll_at") ?? 0);
+export async function pollDue(now = Date.now()) {
+  const last = Number(await metaGet("last_poll_at") ?? 0);
   return now - last >= pollSeconds() * 1000;
 }
 
@@ -130,8 +130,8 @@ export async function fetchSector(category: CategoryId): Promise<Reading | null>
   return { volume, tx };
 }
 
-export function writeCache(category: CategoryId, reading: Reading, source: string, now: number) {
-  run(
+export async function writeCache(category: CategoryId, reading: Reading, source: string, now: number) {
+  await run(
     `INSERT INTO sector_cache(category, volume, tx, updated_at, source)
      VALUES(?, ?, ?, ?, ?)
      ON CONFLICT(category) DO UPDATE SET
@@ -147,8 +147,8 @@ export function writeCache(category: CategoryId, reading: Reading, source: strin
   );
 }
 
-export function cachedReadings() {
-  return rows("SELECT category, volume, tx, updated_at, source FROM sector_cache").map((row) => ({
+export async function cachedReadings() {
+  return (await rows("SELECT category, volume, tx, updated_at, source FROM sector_cache")).map((row) => ({
     category: String(row.category),
     volume: Number(row.volume),
     tx: Number(row.tx),
@@ -157,18 +157,18 @@ export function cachedReadings() {
   }));
 }
 
-export function demoFill(categories: CategoryId[], now: number) {
-  for (const category of categories) writeCache(category, demoReading(category, now), "demo", now);
+export async function demoFill(categories: CategoryId[], now: number) {
+  for (const category of categories) await writeCache(category, demoReading(category, now), "demo", now);
 }
 
-export function nansenStatus(now = Date.now()) {
+export async function nansenStatus(now = Date.now()) {
   return {
     live: Boolean(nansenKey()),
-    callsTotal: callsTotal(),
-    callsToday: callsToday(now),
+    callsTotal: await callsTotal(),
+    callsToday: await callsToday(now),
     budget: dailyBudget(),
-    lastError: metaGet("last_error") || null,
-    creditsRemaining: metaGet("credits_remaining"),
-    updatedAt: Number(metaGet("last_poll_at") || 0) || null,
+    lastError: await metaGet("last_error") || null,
+    creditsRemaining: await metaGet("credits_remaining"),
+    updatedAt: Number(await metaGet("last_poll_at") || 0) || null,
   };
 }

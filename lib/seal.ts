@@ -1,29 +1,34 @@
 import { createHmac, randomBytes, timingSafeEqual } from "crypto";
-import { metaGet, metaSet } from "./db";
+import { metaGet, metaSetIfAbsent } from "./db";
 
-function secret() {
-  const env = process.env.SESSION_SECRET?.trim();
-  if (env) return env;
-  const existing = metaGet("cookie_secret");
-  if (existing) return existing;
+let cached: string | null = process.env.SESSION_SECRET?.trim() || null;
+
+export async function ensureSecret() {
+  if (cached) return cached;
+  const existing = await metaGet("cookie_secret");
+  if (existing) {
+    cached = existing;
+    return cached;
+  }
   const created = randomBytes(32).toString("hex");
-  metaSet("cookie_secret", created);
-  return created;
+  await metaSetIfAbsent("cookie_secret", created);
+  cached = (await metaGet("cookie_secret")) || created;
+  return cached;
 }
 
-export function seal(payload: object) {
+export async function seal(payload: object) {
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = createHmac("sha256", secret()).update(body).digest("base64url");
+  const sig = createHmac("sha256", await ensureSecret()).update(body).digest("base64url");
   return `${body}.${sig}`;
 }
 
-export function unseal<T>(token: string | undefined | null): T | null {
+export async function unseal<T>(token: string | undefined | null): Promise<T | null> {
   if (!token) return null;
   const dot = token.lastIndexOf(".");
   if (dot <= 0) return null;
   const body = token.slice(0, dot);
   const sig = token.slice(dot + 1);
-  const expected = createHmac("sha256", secret()).update(body).digest("base64url");
+  const expected = createHmac("sha256", await ensureSecret()).update(body).digest("base64url");
   const a = Buffer.from(sig);
   const b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;

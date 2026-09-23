@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function POST() {
   const jar = await cookies();
   const token = jar.get("aurasea")?.value;
-  if (token) logout(token);
+  if (token) await logout(token);
   jar.set("aurasea", "", { httpOnly: true, path: "/", maxAge: 0 });
   jar.set("aurasea_x", "", { httpOnly: true, path: "/", maxAge: 0 });
   jar.set("aurasea_pkce", "", { httpOnly: true, path: "/", maxAge: 0 });

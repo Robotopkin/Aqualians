@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const jar = await cookies();
-  const link = unseal<{ id: string; username: string; exp: number }>(jar.get("aurasea_x")?.value);
+  const link = await unseal<{ id: string; username: string; exp: number }>(jar.get("aurasea_x")?.value);
   const fresh = link && link.exp > Date.now() && link.username ? link : null;
   return NextResponse.json({
     configured: xConfig().configured,

@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const jar = await cookies();
-  const games = gamesFor(jar.get("aurasea")?.value ?? "");
+  const games = await gamesFor(jar.get("aurasea")?.value ?? "");
   if (!games) return NextResponse.json({ error: "Enter the sea first" }, { status: 401 });
   return NextResponse.json({ games });
 }

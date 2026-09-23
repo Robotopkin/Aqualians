@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
-import { getDb } from "../lib/db.ts";
 import { settle } from "../lib/payout.ts";
 import type { CategoryId, Mode, Role, StoredBet } from "../lib/types.ts";
 
-const db = getDb();
+throw new Error("Demo seed is for the old local file. The shared sea is Supabase.");
+
+const db = {
+  prepare() {
+    return { get() { return undefined; }, all() { return []; }, run() { return { lastInsertRowid: 0 }; } };
+  },
+  exec() {},
+} as never;
 const owner = db
   .prepare("SELECT id, x_handle FROM users WHERE referral_code = ? OR x_handle = ? LIMIT 1")
   .get("2f8b2a9b", "_robotopkin_") as

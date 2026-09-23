@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing fields" }, { status: 400 });
     }
     const jar = await cookies();
-    const link = unseal<{ id: string; username: string; followers: number | null; exp: number }>(jar.get("aurasea_x")?.value);
+    const link = await unseal<{ id: string; username: string; followers: number | null; exp: number }>(jar.get("aurasea_x")?.value);
     if (!link || link.exp < Date.now() || !link.username || !link.id) {
       return NextResponse.json({ error: "Connect X first" }, { status: 400 });
     }

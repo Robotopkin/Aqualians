@@ -1,5 +1,6 @@
--- AuraSea tables for the Supabase project.
--- Apply once in the SQL editor.
+-- AuraSea tables. Run once in the Supabase SQL editor.
+-- The service role used by the server bypasses row level security.
+-- The public anon key cannot read these tables.
 
 create table if not exists users (
   id bigint generated always as identity primary key,
@@ -8,19 +9,19 @@ create table if not exists users (
   x_user_id text unique,
   role text not null,
   evidence text not null,
-  aura integer not null default 0,
+  aura double precision not null default 0,
   referrer_id bigint references users(id),
   referral_code text not null unique,
   register_message text,
   register_signature text,
   last_grant_on text,
-  created_at timestamptz not null default now()
+  created_at text not null
 );
 
 create table if not exists sessions (
   token text primary key,
   user_id bigint not null references users(id),
-  created_at timestamptz not null default now()
+  created_at text not null
 );
 
 create table if not exists nonces (
@@ -52,21 +53,21 @@ create table if not exists bets (
   user_id bigint not null references users(id),
   category text not null,
   rank integer not null,
-  amount integer not null,
+  amount double precision not null,
   role text not null,
-  created_at timestamptz not null default now()
+  created_at text not null
 );
 
 create table if not exists ledger (
   id bigint generated always as identity primary key,
   user_id bigint not null references users(id),
-  amount integer not null,
+  amount double precision not null,
   reason text not null,
   ref text,
   message text not null,
   signature text not null,
   payload text,
-  created_at timestamptz not null default now()
+  created_at text not null
 );
 
 create table if not exists sector_cache (
@@ -106,3 +107,14 @@ create index if not exists ledger_user on ledger(user_id);
 create index if not exists api_calls_time on api_calls(created_at);
 create index if not exists history_lookup on category_history(category, metric, settled_at);
 create index if not exists users_referrer on users(referrer_id);
+
+alter table users enable row level security;
+alter table sessions enable row level security;
+alter table nonces enable row level security;
+alter table rounds enable row level security;
+alter table bets enable row level security;
+alter table ledger enable row level security;
+alter table sector_cache enable row level security;
+alter table category_history enable row level security;
+alter table api_calls enable row level security;
+alter table meta enable row level security;

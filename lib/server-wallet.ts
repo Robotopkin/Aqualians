@@ -1,37 +1,37 @@
-import fs from "fs";
-import os from "os";
-import path from "path";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { serverPrivateKey } from "./config";
+import { metaGet, metaSetIfAbsent } from "./db";
 import { receiptMessage } from "./messages";
 
 type Account = ReturnType<typeof privateKeyToAccount>;
 
 const globalForKey = globalThis as unknown as { auraseaAccount?: Account };
 
-function loadAccount(): Account {
+function accountFromKey(raw: string): Account {
+  const key = (raw.startsWith("0x") ? raw : `0x${raw}`) as `0x${string}`;
+  return privateKeyToAccount(key);
+}
+
+async function loadAccount(): Promise<Account> {
   const fromEnv = serverPrivateKey();
-  if (fromEnv) {
-    const key = (fromEnv.startsWith("0x") ? fromEnv : `0x${fromEnv}`) as `0x${string}`;
-    return privateKeyToAccount(key);
-  }
-  const file = process.env.VERCEL
-    ? path.join(os.tmpdir(), "server-wallet.json")
-    : path.join(process.cwd(), "data", "server-wallet.json");
-  if (fs.existsSync(file)) {
-    const saved = JSON.parse(fs.readFileSync(file, "utf8")) as { privateKey: `0x${string}` };
-    return privateKeyToAccount(saved.privateKey);
-  }
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  if (fromEnv) return accountFromKey(fromEnv);
+  const existing = await metaGet("attestation_key");
+  if (existing) return accountFromKey(existing);
   const privateKey = generatePrivateKey();
-  const account = privateKeyToAccount(privateKey);
-  fs.writeFileSync(file, JSON.stringify({ address: account.address, privateKey }, null, 2));
+  await metaSetIfAbsent("attestation_key", privateKey);
+  const stored = (await metaGet("attestation_key")) || privateKey;
+  const account = accountFromKey(stored);
   console.log(`AuraSea attestation wallet created: ${account.address}`);
   return account;
 }
 
+export async function ensureServerAccount() {
+  if (!globalForKey.auraseaAccount) globalForKey.auraseaAccount = await loadAccount();
+  return globalForKey.auraseaAccount;
+}
+
 export function serverAccount() {
-  if (!globalForKey.auraseaAccount) globalForKey.auraseaAccount = loadAccount();
+  if (!globalForKey.auraseaAccount) throw new Error("The attestation wallet is not ready");
   return globalForKey.auraseaAccount;
 }
 
