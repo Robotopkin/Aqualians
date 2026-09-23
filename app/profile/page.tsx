@@ -6,7 +6,7 @@ import SiteHeader from "@/components/SiteHeader";
 import ScrollFrame from "@/components/ScrollFrame";
 import { useSea } from "@/components/useSea";
 import { formatAura } from "@/lib/format";
-import type { ReferralRow, TideResult } from "@/lib/types";
+import type { LeaderboardBoard, ReferralRow, TideResult } from "@/lib/types";
 
 export default function ProfilePage() {
   const { state, error, load } = useSea();
@@ -15,6 +15,7 @@ export default function ProfilePage() {
   const [origin, setOrigin] = useState("");
   const [code, setCode] = useState("");
   const [rows, setRows] = useState<ReferralRow[] | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardBoard | null>(null);
 
   useEffect(() => {
     setOrigin(window.location.origin);
@@ -24,6 +25,7 @@ export default function ProfilePage() {
     if (!state?.viewer) {
       setGames(null);
       setRows(null);
+      setLeaderboard(null);
       return;
     }
     void fetch("/api/profile", { cache: "no-store" })
@@ -42,6 +44,13 @@ export default function ProfilePage() {
         setRows(body.rows ?? []);
       })
       .catch((err: unknown) => setNote(err instanceof Error ? err.message : "Could not load referrals"));
+    void fetch("/api/leaderboard", { cache: "no-store" })
+      .then(async (response) => {
+        const body = (await response.json()) as LeaderboardBoard & { error?: string };
+        if (!response.ok) throw new Error(body.error || "Could not load leaderboard");
+        setLeaderboard(body);
+      })
+      .catch((err: unknown) => setNote(err instanceof Error ? err.message : "Could not load leaderboard"));
   }, [state?.viewer]);
 
   const link = code && origin ? `${origin}/?ref=${code}` : "";
@@ -130,6 +139,36 @@ export default function ProfilePage() {
                     ))}
                   </ul>
                 ) : null}
+              </div>
+            </article>
+          </div>
+          <div className="scroll-wrap">
+            <ScrollFrame />
+            <article className="card">
+              <div className="profile-scroll">
+                <div className="kicker">Profile</div>
+                <h2>Leaderboard</h2>
+                {leaderboard ? (
+                  <>
+                    <p className="leaderboard-rank">
+                      Your current place <strong>#{leaderboard.currentRank}</strong>
+                    </p>
+                    <p className="meta">
+                      Top 50 · updated {new Date(leaderboard.refreshedAt).toISOString().slice(11, 16)} UTC
+                    </p>
+                    <ol className="history leaderboard-list">
+                      {leaderboard.rows.map((entry) => (
+                        <li key={entry.xHandle} className={entry.viewer ? "viewer" : undefined}>
+                          <span className="leaderboard-position">#{entry.rank}</span>
+                          <span className="leaderboard-handle">@{entry.xHandle}</span>
+                          <span className="leaderboard-aura">{formatAura(entry.aura)} Aura</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </>
+                ) : (
+                  <p className="meta">The leaderboard appears after sign in.</p>
+                )}
               </div>
             </article>
           </div>

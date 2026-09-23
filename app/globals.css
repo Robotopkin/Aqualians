@@ -241,10 +241,34 @@ h1 {
 }
 .net-loss { color: #ff8e86; }
 .net-profit { color: #7dffa8; }
+.leaderboard-rank {
+  margin: 10px 0 4px;
+  color: var(--mist);
+}
+.leaderboard-rank strong {
+  color: var(--gold);
+  font-family: var(--font-display), "Cinzel", serif;
+  font-size: 24px;
+}
+.leaderboard-list li {
+  display: grid;
+  grid-template-columns: 3.2ch minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.leaderboard-list li.viewer {
+  color: var(--gold);
+  background: rgba(240, 212, 138, 0.08);
+  border-radius: 8px;
+  padding: 8px 6px 0;
+}
+.leaderboard-position { color: var(--mist); font-variant-numeric: tabular-nums; }
+.leaderboard-handle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.leaderboard-aura { color: var(--foam); white-space: nowrap; font-size: 12px; font-variant-numeric: tabular-nums; }
 .profile-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 48px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
   align-items: stretch;
 }
 .profile-page {

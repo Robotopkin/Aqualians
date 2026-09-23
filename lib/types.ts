@@ -94,6 +94,19 @@ export type ReferralRow = {
   joinedAt: string;
 };
 
+export type LeaderboardRow = {
+  rank: number;
+  xHandle: string;
+  aura: number;
+  viewer: boolean;
+};
+
+export type LeaderboardBoard = {
+  refreshedAt: number;
+  currentRank: number;
+  rows: LeaderboardRow[];
+};
+
 export type PublicState = {
   now: number;
   serverAddress: string;

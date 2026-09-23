@@ -16,7 +16,7 @@ import { classifyWallet } from "./roles";
 import { rankCategories, relativeChange } from "./score";
 import { serverAccount, signReceipt } from "./server-wallet";
 import { activeTxWindow, activeVolumeWindow, phaseOf, utcDayKey } from "./time";
-import type { BetLine, CategoryId, Kind, Mode, PublicState, Reading, ReferralRow, Role, RoleEvidence, StoredBet, TideResult } from "./types";
+import type { BetLine, CategoryId, Kind, LeaderboardBoard, Mode, PublicState, Reading, ReferralRow, Role, RoleEvidence, StoredBet, TideResult } from "./types";
 
 type RoundRow = {
   id: string;
@@ -797,5 +797,61 @@ export function referralsFor(token: string): { code: string; rows: ReferralRow[]
       /* skip a broken payload */
     }
   }
-  return { code: user.referral_code, rows: [...map.values()].filter((row) => row.earned > 0) };
+  const unique = new Map<string, ReferralRow>();
+  for (const entry of map.values()) {
+    if (entry.earned <= 0) continue;
+    const key = entry.xHandle.toLowerCase();
+    const current = unique.get(key);
+    if (current) current.earned += entry.earned;
+    else unique.set(key, { ...entry });
+  }
+  return { code: user.referral_code, rows: [...unique.values()] };
+}
+
+type CachedLeaderboardRow = {
+  userId: number;
+  xHandle: string;
+  aura: number;
+};
+
+type CachedLeaderboard = {
+  refreshedAt: number;
+  rows: CachedLeaderboardRow[];
+};
+
+export function leaderboardFor(token: string): LeaderboardBoard | null {
+  const user = sessionUser(token);
+  if (!user) return null;
+  const now = Date.now();
+  let cached: CachedLeaderboard | null = null;
+  try {
+    cached = JSON.parse(metaGet("leaderboard_cache") ?? "null") as CachedLeaderboard | null;
+  } catch {
+    cached = null;
+  }
+  const stale = !cached || now - cached.refreshedAt >= 60 * 60 * 1000;
+  const missingViewer = !cached?.rows.some((row) => row.userId === user.id);
+  if (stale || missingViewer) {
+    cached = {
+      refreshedAt: now,
+      rows: rows("SELECT id, x_handle, aura FROM users ORDER BY aura DESC, id ASC").map((row) => ({
+        userId: Number(row.id),
+        xHandle: String(row.x_handle),
+        aura: Math.floor(Number(row.aura)),
+      })),
+    };
+    metaSet("leaderboard_cache", JSON.stringify(cached));
+  }
+  const board = cached as CachedLeaderboard;
+  const currentRank = Math.max(1, board.rows.findIndex((row) => row.userId === user.id) + 1);
+  return {
+    refreshedAt: board.refreshedAt,
+    currentRank,
+    rows: board.rows.slice(0, 50).map((row, index) => ({
+      rank: index + 1,
+      xHandle: row.xHandle,
+      aura: row.aura,
+      viewer: row.userId === user.id,
+    })),
+  };
 }
