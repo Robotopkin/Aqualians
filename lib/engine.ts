@@ -882,7 +882,7 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
     user.id,
   );
   const ledgerRows = await rows(
-    "SELECT id, ref, reason, amount FROM ledger WHERE user_id = ? AND reason IN ('payout', 'round-refund') ORDER BY id ASC",
+    "SELECT id, ref, reason, payload FROM ledger WHERE user_id = ? AND reason IN ('payout', 'round-refund') ORDER BY id ASC",
     user.id,
   );
   const profitOf = new Map<string, number>();
@@ -890,8 +890,14 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
   for (const row of ledgerRows) {
     const ref = String(row.ref ?? "");
     if (row.reason === "round-refund") returned.add(ref);
-    if (row.reason !== "payout" || profitOf.has(ref)) continue;
-    profitOf.set(ref, Number(row.amount) || 0);
+    if (row.reason !== "payout" || !row.payload || profitOf.has(ref)) continue;
+    try {
+      const payload = JSON.parse(String(row.payload)) as { profit?: number; stake?: number };
+      const received = (Number(payload.stake) || 0) + (Number(payload.profit) || 0);
+      profitOf.set(ref, (profitOf.get(ref) ?? 0) + received);
+    } catch {
+      /* older rows have no split */
+    }
   }
   const grouped = new Map<string, TideResult>();
   const lineup = new Map<string, string[]>();

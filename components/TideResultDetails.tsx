@@ -36,13 +36,10 @@ export function TideResultPicks({ game }: { game: TideResult }) {
 }
 
 export function TideNet({ game }: { game: TideResult }) {
+  const net = game.profit - game.stake;
   if (game.status === "open") return null;
   if (game.status === "returned") return <span className="phase">Stakes returned</span>;
-  if (game.status === "won" && game.profit > 0) {
-    return <span className="net-profit">+{formatAura(game.profit)} Aura</span>;
-  }
-  if (game.status === "lost") {
-    return <span className="net-loss">−{formatAura(game.lost || game.stake)} Aura</span>;
-  }
+  if (net > 0) return <span className="net-profit">+{formatAura(net)} Aura</span>;
+  if (net < 0) return <span className="net-loss">−{formatAura(-net)} Aura</span>;
   return <span className="meta">0 Aura</span>;
 }
