@@ -148,7 +148,7 @@ h1 {
 .account-scroll.open { height: 164px; }
 .account-scroll-content {
   position: absolute;
-  inset: 0;
+  inset: 0 0 16px;
   z-index: 1;
   overflow: hidden;
 }
