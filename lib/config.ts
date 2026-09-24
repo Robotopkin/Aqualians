@@ -1,5 +1,5 @@
 export function nansenKey() {
-  if (process.env.NANSEN_ENABLED !== "1") return "";
+  if (process.env.NANSEN_ENABLED === "0") return "";
   return process.env.NANSEN_API_KEY?.trim() || "";
 }
 

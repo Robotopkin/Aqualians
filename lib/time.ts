@@ -1,4 +1,13 @@
 const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
+
+export function roundSpan() {
+  const raw = process.env.AURASEA_ROUND_MS;
+  if (raw === "0") return DAY;
+  const n = Number(raw ?? 5 * 60 * 1000);
+  if (!Number.isFinite(n) || n < 60_000) return 5 * 60 * 1000;
+  return Math.floor(n);
+}
 
 export function utcMidnight(now: number) {
   const d = new Date(now);
@@ -9,17 +18,26 @@ export function utcDayKey(now: number) {
   return new Date(utcMidnight(now)).toISOString().slice(0, 10);
 }
 
+export function grantKey(now: number) {
+  const span = roundSpan();
+  if (span >= DAY) return utcDayKey(now);
+  const slot = Math.floor(now / span) * span;
+  return new Date(slot).toISOString();
+}
+
 export type Window = { start: number; betsClose: number; end: number };
 
 export function activeVolumeWindow(now: number): Window {
-  const start = utcMidnight(now);
-  return { start, betsClose: start + 12 * HOUR, end: start + 24 * HOUR };
+  const span = roundSpan();
+  const start = Math.floor(now / span) * span;
+  return { start, betsClose: start + span / 2, end: start + span };
 }
 
 export function activeTxWindow(now: number): Window {
-  const mid = utcMidnight(now) + 12 * HOUR;
-  const start = now >= mid ? mid : mid - 24 * HOUR;
-  return { start, betsClose: start + 12 * HOUR, end: start + 24 * HOUR };
+  const span = roundSpan();
+  const half = span / 2;
+  const start = Math.floor((now - half) / span) * span + half;
+  return { start, betsClose: start + half, end: start + span };
 }
 
 export function phaseOf(now: number, window: Window): "betting" | "forming" {

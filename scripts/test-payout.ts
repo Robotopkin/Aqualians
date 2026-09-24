@@ -14,6 +14,7 @@ function bet(partial: Partial<StoredBet> & Pick<StoredBet, "id" | "userId" | "am
   };
 }
 
+process.env.AURASEA_ROUND_MS = "0";
 const noon = Date.UTC(2026, 8, 23, 15, 0, 0);
 const volume = activeVolumeWindow(noon);
 assert.equal(volume.start, Date.UTC(2026, 8, 23));
@@ -25,6 +26,16 @@ const tx = activeTxWindow(morning);
 assert.equal(tx.start, Date.UTC(2026, 8, 22, 12));
 assert.equal(tx.betsClose, Date.UTC(2026, 8, 23));
 assert.equal(tx.end, Date.UTC(2026, 8, 23, 12));
+
+process.env.AURASEA_ROUND_MS = "300000";
+const fast = activeVolumeWindow(noon);
+assert.equal(fast.end - fast.start, 300_000);
+assert.equal(fast.betsClose - fast.start, 150_000);
+assert.ok(fast.start <= noon && noon < fast.end);
+const fastTx = activeTxWindow(noon);
+assert.equal(fastTx.end - fastTx.start, 300_000);
+assert.equal(fastTx.start % 300_000, 150_000);
+process.env.AURASEA_ROUND_MS = "0";
 
 assert.equal(relativeChange(100, 110), 0.1);
 assert.equal(relativeChange(0, 5), 1);

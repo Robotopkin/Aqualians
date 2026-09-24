@@ -42,7 +42,7 @@ export function useSea() {
 
   useEffect(() => {
     void load();
-    const poll = setInterval(() => void load(), 20000);
+    const poll = setInterval(() => void load(), 10000);
     const tick = setInterval(() => setNow((n) => n + 1000), 1000);
     return () => {
       clearInterval(poll);

@@ -15,7 +15,7 @@ import { settle } from "./payout";
 import { classifyWallet } from "./roles";
 import { rankCategories, relativeChange } from "./score";
 import { ensureServerAccount, serverAccount, signReceipt } from "./server-wallet";
-import { activeTxWindow, activeVolumeWindow, phaseOf, utcDayKey } from "./time";
+import { activeTxWindow, activeVolumeWindow, grantKey, phaseOf, roundSpan } from "./time";
 import type { BetLine, CategoryId, Kind, LeaderboardBoard, Mode, PublicState, Reading, ReferralRow, Role, RoleEvidence, StoredBet, TideResult } from "./types";
 
 type RoundRow = {
@@ -59,9 +59,45 @@ export function runTick() {
   return withLock(() => tick());
 }
 
+async function closeStaleRounds(now: number) {
+  const span = roundSpan();
+  const volume = activeVolumeWindow(now);
+  const tx = activeTxWindow(now);
+  const keep = new Set([`volume:${new Date(volume.start).toISOString()}`, `tx:${new Date(tx.start).toISOString()}`]);
+  const open = (await rows("SELECT * FROM rounds WHERE status = 'open'")) as unknown as RoundRow[];
+  for (const round of open) {
+    if (keep.has(round.id) || round.ends_at <= now) continue;
+    if (round.ends_at - round.starts_at === span) continue;
+    const bets = await loadBets(round.id);
+    await payRefunds(round, bets, "the tide clock changed");
+    await run(
+      "UPDATE rounds SET status = 'settled', result_json = ? WHERE id = ?",
+      JSON.stringify({ refund: true, reason: "clock changed" }),
+      round.id,
+    );
+  }
+}
+
+let tideJob: Promise<void> | null = null;
+
+function scheduleTide(now: number, open: RoundRow[]) {
+  const due = open.length < 2 || open.some((round) => !round.baseline_json || round.ends_at <= now);
+  if (!due || tideJob) return;
+  tideJob = runTick()
+    .catch((err: unknown) => console.error("tide", err instanceof Error ? err.message : err))
+    .finally(() => {
+      tideJob = null;
+    });
+}
+
+export function pendingTide() {
+  return tideJob;
+}
+
 async function tick() {
   const now = Date.now();
   await rollPlaces();
+  await closeStaleRounds(now);
   await ensureRound("volume", activeVolumeWindow(now));
   await ensureRound("tx", activeTxWindow(now));
   await refreshReadings(now);
@@ -134,10 +170,12 @@ async function refreshReadings(now: number) {
     return;
   }
 
-  for (const category of categoriesDue) {
-    const reading = await fetchSector(category);
-    if (reading) await writeCache(category, reading, "live", now);
-  }
+  await Promise.all(
+    categoriesDue.map(async (category) => {
+      const reading = await fetchSector(category);
+      if (reading) await writeCache(category, reading, "live", now);
+    }),
+  );
   await metaSet("last_poll_at", String(now));
   await applyCache(due, "live", now);
 }
@@ -441,7 +479,7 @@ async function openSession(userId: number) {
 }
 
 export async function grantIfNeeded(user: UserRow, first = false) {
-  const today = utcDayKey(Date.now());
+  const today = grantKey(Date.now());
   const amount = user.role === "whale" ? WHALE_DAILY_AURA : DAILY_AURA;
   if (user.last_grant_on === today) return { user, granted: null as number | null, day: today };
   const updated = await run(
@@ -535,6 +573,7 @@ export async function publicState(token: string | null): Promise<PublicState> {
   const volume = activeVolumeWindow(now);
   const tx = activeTxWindow(now);
   await ensureServerAccount();
+  await closeStaleRounds(now);
   await Promise.all([ensureRound("volume", volume), ensureRound("tx", tx)]);
   const [viewerRow, open, population, nansen] = await Promise.all([
     token ? sessionUser(token) : Promise.resolve(null),
@@ -553,6 +592,7 @@ export async function publicState(token: string | null): Promise<PublicState> {
     viewer ? toViewer(viewer) : Promise.resolve(null),
     Promise.all(open.map((round) => toRound(round, now, viewer))),
   ]);
+  scheduleTide(now, open);
   return {
     now,
     serverAddress: serverAccount().address,

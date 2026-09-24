@@ -27,8 +27,10 @@ function formatPct(n: number | null) {
   return `${sign}${pct.toFixed(digits)}%`;
 }
 
-function formatRemain(ms: number) {
-  const minutes = Math.max(0, Math.round(ms / 60_000));
+function formatRemain(ms: number, fast: boolean) {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (fast && seconds < 60) return `${seconds}s`;
+  const minutes = Math.round(seconds / 60);
   if (minutes >= 60) return `${Math.round(minutes / 60)}h`;
   return `${minutes}m`;
 }
@@ -142,9 +144,9 @@ export default function Game() {
         <details className="rules">
           <summary>How a round works</summary>
           <p>
-            Whale Hunt compares volume. It opens 00:00–12:00 UTC and settles at the next 00:00. Shrimp Gather
-            compares transaction count. It opens 12:00–00:00 UTC and settles at 12:00. Each round compares its
-            opening result with its closing result.
+            {state?.rounds.some((round) => round.endsAt - round.startsAt < 60 * 60 * 1000)
+              ? "Test clock: each tide lasts 5 minutes. Bets are open for the first half, then the tide settles. Aura is granted every 5 minutes."
+              : "Whale Hunt compares volume. It opens 00:00–12:00 UTC and settles at the next 00:00. Shrimp Gather compares transaction count. It opens 12:00–00:00 UTC and settles at 12:00. Each round compares its opening result with its closing result."}
           </p>
           <ul>
             <li>Growth ranks the biggest gain as 1st. If every category is down, 1st is the smallest drop. The round asks which category takes one place, 1st through 4th.</li>
@@ -226,7 +228,7 @@ function RoundCard({
         </div>
         <div className="round-status">
           <div className={`phase ${round.phase}`}>{round.phase === "betting" ? "bets open" : "bets closed"}</div>
-          <div className="count">{formatRemain(target - now)}</div>
+          <div className="count">{formatRemain(target - now, round.endsAt - round.startsAt < 60 * 60 * 1000)}</div>
         </div>
       </div>
       <div className="options">
