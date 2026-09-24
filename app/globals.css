@@ -622,6 +622,7 @@ h2 {
   transform-origin: center bottom;
   animation: tide-spin 1.1s linear infinite;
 }
+.tide-loader-mark.whale { transform-origin: center top; }
 @keyframes tide-spin {
   to { transform: rotate(-360deg); }
 }
