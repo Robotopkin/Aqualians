@@ -44,39 +44,52 @@ export default function ProfilePage() {
     }
     let gone = false;
     setPanelsReady(false);
+    const notes: string[] = [];
+    const remember = (err: unknown) => {
+      notes.push(err instanceof Error ? err.message : "Could not load the profile");
+    };
     void Promise.all([
-      fetch("/api/profile", { cache: "no-store" }).then(async (response) => {
-        const body = await readJson<{ games?: TideResult[] }>(response);
-        if (!response.ok) throw new Error(body.error || "Could not load the profile");
-        return body.games ?? [];
-      }),
-      fetch("/api/referrals", { cache: "no-store" }).then(async (response) => {
-        const body = await readJson<{ rows?: ReferralRow[] }>(response);
-        if (!response.ok) throw new Error(body.error || "Could not load referrals");
-        return body.rows ?? [];
-      }),
-      fetch("/api/leaderboard", { cache: "no-store" }).then(async (response) => {
-        const body = await readJson<LeaderboardBoard>(response);
-        if (!response.ok) throw new Error(body.error || "Could not load leaderboard");
-        return body;
-      }),
-    ])
-      .then(([nextGames, nextRows, nextBoard]) => {
-        if (gone) return;
-        setGames(nextGames);
-        setRows(nextRows);
-        setLeaderboard(nextBoard);
-        setNote("");
-      })
-      .catch((err: unknown) => {
-        if (gone) return;
-        setNote(err instanceof Error ? err.message : "Could not load the profile");
-        setGames((current) => current ?? []);
-        setRows((current) => current ?? []);
-      })
-      .finally(() => {
-        if (!gone) setPanelsReady(true);
-      });
+      fetch("/api/profile", { cache: "no-store" })
+        .then(async (response) => {
+          const body = await readJson<{ games?: TideResult[] }>(response);
+          if (!response.ok) throw new Error(body.error || "Could not load the profile");
+          return body.games ?? [];
+        })
+        .then((nextGames) => {
+          if (!gone) setGames(nextGames);
+        })
+        .catch((err: unknown) => {
+          remember(err);
+          if (!gone) setGames([]);
+        }),
+      fetch("/api/referrals", { cache: "no-store" })
+        .then(async (response) => {
+          const body = await readJson<{ rows?: ReferralRow[] }>(response);
+          if (!response.ok) throw new Error(body.error || "Could not load referrals");
+          return body.rows ?? [];
+        })
+        .then((nextRows) => {
+          if (!gone) setRows(nextRows);
+        })
+        .catch((err: unknown) => {
+          remember(err);
+          if (!gone) setRows([]);
+        }),
+      fetch("/api/leaderboard", { cache: "no-store" })
+        .then(async (response) => {
+          const body = await readJson<LeaderboardBoard>(response);
+          if (!response.ok) throw new Error(body.error || "Could not load leaderboard");
+          return body;
+        })
+        .then((nextBoard) => {
+          if (!gone) setLeaderboard(nextBoard);
+        })
+        .catch(remember),
+    ]).finally(() => {
+      if (gone) return;
+      setNote(notes[0] ?? "");
+      setPanelsReady(true);
+    });
     return () => {
       gone = true;
     };

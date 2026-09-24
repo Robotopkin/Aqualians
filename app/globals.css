@@ -339,6 +339,8 @@ h1 {
   align-items: flex-start;
 }
 .kicker { color: var(--gold); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; }
+.kicker .tide-open { color: #7dffa8; }
+.kicker .tide-closed { color: #ff8e86; }
 h2 {
   font-family: var(--font-display), Georgia, serif;
   font-size: clamp(28px, 2.6vw, 40px);

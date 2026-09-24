@@ -74,39 +74,44 @@ function splitCsv(input: string) {
   return input.split(",").map((part) => part.trim());
 }
 
+function columnName(name: string) {
+  return name.replace(/^[a-z]\./, "");
+}
+
 function applyWhere(query: Filter, where: string, params: unknown[]) {
   let index = 0;
   const take = () => params[index++];
+  const col = "((?:[a-z]\\.)?\\w+)";
   for (const part of where.split(/\s+AND\s+/i)) {
-    const eq = part.match(/^(\w+)\s*=\s*\?$/);
+    const eq = part.match(new RegExp(`^${col}\\s*=\\s*\\?$`));
     if (eq) {
-      query = query.eq(eq[1], take());
+      query = query.eq(columnName(eq[1]), take());
       continue;
     }
-    const literal = part.match(/^(\w+)\s*=\s*'([^']*)'$/);
+    const literal = part.match(new RegExp(`^${col}\\s*=\\s*'([^']*)'$`));
     if (literal) {
-      query = query.eq(literal[1], literal[2]);
+      query = query.eq(columnName(literal[1]), literal[2]);
       continue;
     }
-    const lte = part.match(/^(\w+)\s*<=\s*\?$/);
+    const lte = part.match(new RegExp(`^${col}\\s*<=\\s*\\?$`));
     if (lte) {
-      query = query.lte(lte[1], take());
+      query = query.lte(columnName(lte[1]), take());
       continue;
     }
-    const gte = part.match(/^(\w+)\s*>=\s*\?$/);
+    const gte = part.match(new RegExp(`^${col}\\s*>=\\s*\\?$`));
     if (gte) {
-      query = query.gte(gte[1], take());
+      query = query.gte(columnName(gte[1]), take());
       continue;
     }
-    const lt = part.match(/^(\w+)\s*<\s*\?$/);
+    const lt = part.match(new RegExp(`^${col}\\s*<\\s*\\?$`));
     if (lt) {
-      query = query.lt(lt[1], take());
+      query = query.lt(columnName(lt[1]), take());
       continue;
     }
-    const list = part.match(/^(\w+)\s+IN\s*\(([^)]+)\)$/i);
+    const list = part.match(new RegExp(`^${col}\\s+IN\\s*\\(([^)]+)\\)$`, "i"));
     if (list) {
       query = query.in(
-        list[1],
+        columnName(list[1]),
         list[2].split(",").map((item) => item.trim().replace(/^'|'$/g, "")),
       );
       continue;
@@ -118,9 +123,9 @@ function applyWhere(query: Filter, where: string, params: unknown[]) {
 
 function applyOrder(query: Filter, order: string) {
   for (const piece of order.split(",")) {
-    const match = piece.trim().match(/^(\w+)(?:\s+(ASC|DESC))?$/i);
+    const match = piece.trim().match(/^((?:[a-z]\.)?\w+)(?:\s+(ASC|DESC))?$/i);
     if (!match) throw new Error(`Unsupported order: ${piece}`);
-    query = query.order(match[1], { ascending: (match[2] ?? "ASC").toUpperCase() !== "DESC" });
+    query = query.order(columnName(match[1]), { ascending: (match[2] ?? "ASC").toUpperCase() !== "DESC" });
   }
   return query;
 }
@@ -157,7 +162,7 @@ async function selectRows(sql: string, params: unknown[]): Promise<SqlRow[]> {
     rest = rest.slice(0, limitMatch.index).trim();
   }
   let order = "";
-  const orderMatch = rest.match(/\sORDER BY\s+(.+)$/);
+  const orderMatch = rest.match(/(?:^|\s)ORDER BY\s+(.+)$/i);
   if (orderMatch && orderMatch.index != null) {
     order = orderMatch[1];
     rest = rest.slice(0, orderMatch.index).trim();

@@ -109,7 +109,9 @@ export default function Game() {
         {error ? <div className="error">{error}</div> : null}
 
         <section className="rounds">
-          {(state?.rounds ?? []).map((round) => (
+          {[...(state?.rounds ?? [])]
+            .sort((a, b) => (a.kind === b.kind ? a.startsAt - b.startsAt : a.kind === "volume" ? -1 : 1))
+            .map((round) => (
             <RoundCard
               key={round.id}
               round={round}
@@ -215,6 +217,10 @@ function RoundCard({
         <div>
           <div className="kicker">
             {round.kind === "volume" ? "Volume" : "Transaction count"} · {MODE_NAME[round.mode]} · {placeLabel(round.place)} place
+            {" · "}
+            <span className={round.phase === "betting" ? "tide-open" : "tide-closed"}>
+              {round.phase === "betting" ? "open" : "closed"}
+            </span>
           </div>
           <h2>{round.title}</h2>
           <p className="question">{round.question}</p>
@@ -227,7 +233,6 @@ function RoundCard({
           </p>
         </div>
         <div className="round-status">
-          <div className={`phase ${round.phase}`}>{round.phase === "betting" ? "bets open" : "bets closed"}</div>
           <div className="count">{formatRemain(target - now, round.endsAt - round.startsAt < 60 * 60 * 1000)}</div>
         </div>
       </div>
