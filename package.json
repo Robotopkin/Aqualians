@@ -12,7 +12,8 @@
     "start": "next start",
     "test": "tsx scripts/test-payout.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
-    "reset:production": "tsx scripts/reset-production.ts"
+    "reset:production": "tsx scripts/reset-production.ts",
+    "verify:production": "tsx scripts/verify-production.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.117.1",
