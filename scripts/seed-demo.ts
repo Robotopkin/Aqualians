@@ -56,7 +56,7 @@ try {
         chain: "demo",
         balanceUsd: null,
         tradedTimes: role === "shark" ? 1 : 0,
-        winRate: role === "shark" ? 0.4 + index / 100 : null,
+        winRate: role === "shark" ? 0.5 + index / 100 : null,
         volumeUsd: role === "whale" ? 10_000 + index * 1_000 : 0,
         activeDays: role === "dolphin" ? 14 + index : 0,
         publicFigureChecked: false,

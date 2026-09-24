@@ -159,7 +159,9 @@ assert.equal(tie, "ai");
 
 assert.equal(roleFromStats({ volumeUsd: 10_000, tradedTimes: 1, winRate: 0, activeDays: 0 }), "whale");
 assert.equal(roleFromStats({ volumeUsd: 9_999, tradedTimes: 1, winRate: 0, activeDays: 30 }), "dolphin");
-assert.equal(roleFromStats({ volumeUsd: 0, tradedTimes: 5, winRate: 0.4, activeDays: 0 }), "shark");
+assert.equal(roleFromStats({ volumeUsd: 0, tradedTimes: 5, winRate: 0.5, activeDays: 0 }), "shark");
+assert.equal(roleFromStats({ volumeUsd: 0, tradedTimes: 5, winRate: 0.4, activeDays: 0 }), "shrimp");
+assert.equal(roleFromStats({ volumeUsd: 0, tradedTimes: 5, winRate: 0.49, activeDays: 14 }), "dolphin");
 assert.equal(roleFromStats({ volumeUsd: 0, tradedTimes: 5, winRate: 0.39, activeDays: 14 }), "dolphin");
 assert.equal(roleFromStats({ volumeUsd: 50_000, tradedTimes: 0, winRate: null, activeDays: 0 }), "whale");
 assert.equal(roleFromStats({ volumeUsd: 0, tradedTimes: 0, winRate: 1, activeDays: 0 }), "shark");

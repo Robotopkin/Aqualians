@@ -68,6 +68,12 @@ async function closeStaleRounds(now: number) {
   for (const round of open) {
     if (keep.has(round.id) || round.ends_at <= now) continue;
     if (round.ends_at - round.starts_at === span) continue;
+    const claimed = await run(
+      "UPDATE rounds SET status = 'settling', result_json = ? WHERE id = ? AND status = 'open'",
+      JSON.stringify({ refund: true, reason: "clock changed" }),
+      round.id,
+    );
+    if (!claimed.changes) continue;
     const bets = await loadBets(round.id);
     await payRefunds(round, bets, "the tide clock changed");
     await run(
@@ -97,11 +103,14 @@ export function pendingTide() {
 async function tick() {
   const now = Date.now();
   await rollPlaces();
+  await collapseDuplicateCredits();
   await closeStaleRounds(now);
   await ensureRound("volume", activeVolumeWindow(now));
   await ensureRound("tx", activeTxWindow(now));
   await refreshReadings(now);
-  const due = await rows("SELECT * FROM rounds WHERE status = 'open' AND ends_at <= ?", now) as unknown as RoundRow[];
+  const ended = (await rows("SELECT * FROM rounds WHERE status = 'open' AND ends_at <= ?", now)) as unknown as RoundRow[];
+  const settling = (await rows("SELECT * FROM rounds WHERE status = 'settling'")) as unknown as RoundRow[];
+  const due = [...ended, ...settling.filter((round) => !ended.some((open) => open.id === round.id))];
   for (const round of due) await settleRound(round, now);
 }
 
@@ -265,7 +274,86 @@ function parseReadings(raw: string | null): Partial<Record<CategoryId, Reading>>
   }
 }
 
+async function collapseDuplicateCredits() {
+  if (await metaGet("payout_once_v1")) return;
+  const entries = await rows(
+    "SELECT id, user_id, ref, amount, reason, payload FROM ledger WHERE reason IN ('payout', 'referral') ORDER BY id ASC",
+  );
+  const seen = new Set<string>();
+  const extra = new Map<number, number>();
+  for (const row of entries) {
+    let from = "";
+    if (String(row.reason) === "referral" && row.payload) {
+      try {
+        from = String((JSON.parse(String(row.payload)) as { fromUserId?: number }).fromUserId ?? "");
+      } catch {
+        from = "";
+      }
+    }
+    const key = `${row.reason}:${row.user_id}:${String(row.ref ?? "")}:${from}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      continue;
+    }
+    const userId = Number(row.user_id);
+    extra.set(userId, (extra.get(userId) ?? 0) + (Number(row.amount) || 0));
+  }
+  for (const [userId, amount] of extra) {
+    if (amount <= 0) continue;
+    const user = await userById(userId);
+    if (!user || user.aura <= 0) continue;
+    await credit(user, -Math.min(amount, user.aura), "payout-correction", "duplicate", {
+      note: "duplicate tide payout",
+    });
+  }
+  await metaSet("payout_once_v1", "1");
+}
+
+async function alreadyCredited(userId: number, reason: string, ref: string, fromUserId?: number) {
+  const found = await rows(
+    "SELECT payload FROM ledger WHERE user_id = ? AND reason = ? AND ref = ?",
+    userId,
+    reason,
+    ref,
+  );
+  if (fromUserId == null) return found.length > 0;
+  return found.some((row) => {
+    try {
+      return Number(JSON.parse(String(row.payload)).fromUserId) === fromUserId;
+    } catch {
+      return false;
+    }
+  });
+}
+
+function clockRefund(round: RoundRow) {
+  try {
+    const parsed = JSON.parse(round.result_json ?? "") as { reason?: string };
+    return parsed.reason === "clock changed";
+  } catch {
+    return false;
+  }
+}
+
 async function settleRound(round: RoundRow, now: number) {
+  if (round.status !== "settling") {
+    const claimed = await run(
+      "UPDATE rounds SET status = 'settling' WHERE id = ? AND status = 'open'",
+      round.id,
+    );
+    if (!claimed.changes) return;
+    round.status = "settling";
+  }
+  if (clockRefund(round)) {
+    const bets = await loadBets(round.id);
+    await payRefunds(round, bets, "the tide clock changed");
+    await run(
+      "UPDATE rounds SET status = 'settled', result_json = ? WHERE id = ?",
+      JSON.stringify({ refund: true, reason: "clock changed" }),
+      round.id,
+    );
+    return;
+  }
   const categories = JSON.parse(round.categories) as CategoryId[];
   const baseline = parseReadings(round.baseline_json);
   const latest = parseReadings(round.latest_json);
@@ -291,7 +379,9 @@ async function settleRound(round: RoundRow, now: number) {
   for (const payout of settlement.payouts) {
     const user = await userById(payout.userId);
     if (!user) continue;
-    await credit(user, payout.stakeBack + payout.profit, settlement.refund ? "round-refund" : "payout", round.id, {
+    const reason = settlement.refund ? "round-refund" : "payout";
+    if (await alreadyCredited(user.id, reason, round.id)) continue;
+    await credit(user, payout.stakeBack + payout.profit, reason, round.id, {
       stake: payout.stakeBack,
       profit: payout.profit,
     });
@@ -299,9 +389,12 @@ async function settleRound(round: RoundRow, now: number) {
   for (const bonus of settlement.referrals) {
     const user = await userById(bonus.userId);
     if (!user) continue;
+    if (await alreadyCredited(user.id, "referral", round.id, bonus.fromUserId)) continue;
     await credit(user, bonus.amount, "referral", round.id, { fromUserId: bonus.fromUserId });
   }
   for (const rank of settlement.ranks) {
+    const prior = await one("SELECT id FROM category_history WHERE round_id = ? AND category = ?", round.id, rank.category);
+    if (prior) continue;
     await run(
       `INSERT INTO category_history(category, metric, change_pct, rank, round_id, settled_at)
        VALUES(?, ?, ?, ?, ?, ?)`,
@@ -326,6 +419,7 @@ async function payRefunds(round: RoundRow, bets: StoredBet[], reason: string) {
   for (const [userId, amount] of byUser) {
     const user = await userById(userId);
     if (!user) continue;
+    if (await alreadyCredited(user.id, "round-refund", round.id)) continue;
     await credit(user, amount, "round-refund", round.id, { reason });
   }
 }
@@ -790,7 +884,7 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
     user.id,
   );
   const ledgerRows = await rows(
-    "SELECT ref, reason, payload FROM ledger WHERE user_id = ? AND reason IN ('payout', 'round-refund')",
+    "SELECT id, ref, reason, payload FROM ledger WHERE user_id = ? AND reason IN ('payout', 'round-refund') ORDER BY id ASC",
     user.id,
   );
   const profitOf = new Map<string, number>();
@@ -798,7 +892,7 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
   for (const row of ledgerRows) {
     const ref = String(row.ref ?? "");
     if (row.reason === "round-refund") returned.add(ref);
-    if (row.reason !== "payout" || !row.payload) continue;
+    if (row.reason !== "payout" || !row.payload || profitOf.has(ref)) continue;
     try {
       const payload = JSON.parse(String(row.payload)) as { profit?: number; stake?: number };
       const received = (Number(payload.stake) || 0) + (Number(payload.profit) || 0);
@@ -902,12 +996,19 @@ export async function referralsFor(token: string): Promise<{ code: string; rows:
       joinedAt: String(row.created_at),
     });
   }
-  const bonuses = await rows("SELECT amount, payload FROM ledger WHERE user_id = ? AND reason = 'referral'", user.id);
+  const bonuses = await rows(
+    "SELECT id, amount, payload FROM ledger WHERE user_id = ? AND reason = 'referral' ORDER BY id ASC",
+    user.id,
+  );
+  const seenBonus = new Set<number>();
   for (const row of bonuses) {
     if (!row.payload) continue;
     try {
       const payload = JSON.parse(String(row.payload)) as { fromUserId?: number };
-      const entry = map.get(Number(payload.fromUserId));
+      const fromUserId = Number(payload.fromUserId);
+      if (seenBonus.has(fromUserId)) continue;
+      seenBonus.add(fromUserId);
+      const entry = map.get(fromUserId);
       if (entry) entry.earned += Number(row.amount) || 0;
     } catch {
       /* skip a broken payload */

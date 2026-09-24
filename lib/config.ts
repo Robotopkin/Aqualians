@@ -37,7 +37,7 @@ export function serverPrivateKey() {
 
 export const ROLE_CALL_CAP = 6;
 export const WHALE_VOLUME_USD = 10_000;
-export const SHARK_MIN_WIN_RATE = 0.4;
+export const SHARK_MIN_WIN_RATE = 0.5;
 export const DOLPHIN_MIN_DAYS = 14;
 export const DAILY_AURA = 100;
 export const WHALE_DAILY_AURA = 300;
