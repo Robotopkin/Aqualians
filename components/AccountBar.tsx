@@ -301,10 +301,12 @@ export default function AccountBar({
 
   const revealModal = reveal ? (
     <div className="veil">
-      <div className="card modal" role="dialog" aria-modal="true">
-        <img src={`/roles/${reveal.role}.png`} alt="" className="role-icon lg" />
-        <h2>{ROLE_NAME[reveal.role]}</h2>
-        <p className="meta">{ROLE_COPY[reveal.role]}</p>
+      <div className="card modal role-reveal" role="dialog" aria-modal="true">
+        <div className="role-reveal-head">
+          <h2>{ROLE_NAME[reveal.role]}</h2>
+          <img src={`/roles/${reveal.role}.png`} alt="" className="role-icon lg" />
+        </div>
+        <p className="role-ability">{ROLE_COPY[reveal.role]}</p>
         <div className="staked-label">Aura</div>
         <TideNum value={formatAura(reveal.amount)} />
         <button className="solid" onClick={closeReveal}>
