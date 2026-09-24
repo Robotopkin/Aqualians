@@ -902,8 +902,10 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
   const grouped = new Map<string, TideResult>();
   const lineup = new Map<string, string[]>();
   const outcomes = new Map<string, Map<string, { rank: number; change: number }>>();
+  const targetRanks = new Map<string, number>();
   for (const row of betRows) {
     const roundId = String(row.id);
+    targetRanks.set(roundId, Number(row.place) || 1);
     const settled = String(row.status) === "settled";
     let refund = returned.has(roundId);
     let ranks: { category: string; rank: number; change: number }[] = [];
@@ -985,6 +987,7 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
     const categories = lineup.get(game.roundId) ?? [];
     const result = outcomes.get(game.roundId);
     if (categories.length) {
+      const targetRank = targetRanks.get(game.roundId);
       game.picks = categories.map((category) => {
         const outcome = result?.get(category);
         const pick = have.get(category) ?? {
@@ -997,6 +1000,7 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
         };
         return {
           ...pick,
+          won: outcome && targetRank != null ? outcome.rank === targetRank : pick.won,
           rank: outcome?.rank ?? null,
           changePct: outcome?.change ?? null,
         };
