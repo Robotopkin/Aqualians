@@ -164,13 +164,10 @@ export default function AccountBar({
         const response = await fetch("/api/profile", { cache: "no-store" });
         const body = (await response.json()) as { games?: TideResult[] };
         if (!response.ok || !Array.isArray(body.games)) return;
-        let latest: TideResult | null = null;
-        for (let index = body.games.length - 1; index >= 0; index--) {
-          if (body.games[index]?.status !== "open") {
-            latest = body.games[index] ?? null;
-            break;
-          }
-        }
+        const latest = body.games.reduce<TideResult | null>((current, game) => {
+          if (game.status === "open") return current;
+          return !current || game.startsAt > current.startsAt ? game : current;
+        }, null);
         const seenKey = `aurasea_result_seen:${viewer.address.toLowerCase()}`;
         if (!latest || localStorage.getItem(seenKey) === latest.roundId) return;
         if (!gone) setResult(latest);
