@@ -129,14 +129,16 @@ h1 {
 .account-scroll {
   position: relative;
   width: 100%;
-  min-height: 72px;
+  height: 80px;
+  transition: height 520ms cubic-bezier(0.45, 0.05, 0.25, 1);
 }
+.account-scroll.open { height: 164px; }
 .account-scroll-content {
   position: relative;
   z-index: 1;
   display: grid;
-  min-height: 72px;
-  padding: 18px 20px;
+  height: 100%;
+  padding: 24px 20px 20px;
 }
 .account-trigger {
   width: 100%;
@@ -151,20 +153,37 @@ h1 {
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 20px;
 }
 .account-panel {
   width: 100%;
   display: grid;
   gap: 8px;
-  margin-top: 10px;
-  padding-top: 12px;
-  border-top: 1px solid var(--line);
+  max-height: 0;
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 1px solid transparent;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
   text-align: left;
-  animation: drop-menu 160ms ease-out;
+  transform: translateY(-8px);
+  transition:
+    max-height 360ms ease 100ms,
+    margin-top 360ms ease 100ms,
+    padding-top 360ms ease 100ms,
+    border-color 220ms ease 140ms,
+    opacity 220ms ease 150ms,
+    transform 360ms ease 100ms;
 }
-@keyframes drop-menu {
-  from { transform: translateY(-8px); opacity: 0; }
-  to { transform: translateY(0); }
+.account-panel.open {
+  max-height: 76px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top-color: var(--line);
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
 }
 .account-panel a, .menu-link {
   display: block;

@@ -396,8 +396,8 @@ export default function AccountBar({
         if (viewer) setOpen(false);
       }}
     >
-      <div className="account-scroll">
-        <ScrollFrame />
+      <div className={`account-scroll${viewer && open ? " open" : ""}`}>
+        <ScrollFrame rollerSize={16} />
         <div className="account-scroll-content">
           <button
             className="account-trigger"
@@ -410,13 +410,13 @@ export default function AccountBar({
           >
             {busy && !wallet ? "Connecting…" : label}
           </button>
-          {viewer && open ? (
-            <div className="account-panel">
-              <a href="/profile" className="account-profile-link">
+          {viewer ? (
+            <div className={`account-panel${open ? " open" : ""}`} aria-hidden={!open}>
+              <a href="/profile" className="account-profile-link" tabIndex={open ? 0 : -1}>
                 <span>Profile</span>
                 <img src={`/roles/${viewer.role}.png`} alt="" className="role-icon account-role-icon" />
               </a>
-              <button className="menu-link disconnect-link" onClick={() => void disconnect()}>
+              <button className="menu-link disconnect-link" tabIndex={open ? 0 : -1} onClick={() => void disconnect()}>
                 Disconnect
               </button>
             </div>
