@@ -6,9 +6,9 @@ export default function ClickSound() {
   useEffect(() => {
     const sound = new Audio("/drop.mp3");
     sound.preload = "auto";
-    sound.volume = 0.3;
+    sound.volume = 0.2;
     const play = () => {
-      sound.volume = 0.3;
+      sound.volume = 0.2;
       sound.currentTime = 0;
       void sound.play().catch(() => {});
     };
