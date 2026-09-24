@@ -263,9 +263,8 @@ export default function AccountBar({
         ) : (
           <>
             <h2>Enter the sea</h2>
-            <p className="meta">Connect X, add a referral code, then sign a free message. Nothing is sent on-chain.</p>
             {xHandle ? (
-              <p className="meta">X @{xHandle}</p>
+              <p className="x-handle">@{xHandle}</p>
             ) : (
               <a
                 className="solid x-link"
@@ -290,16 +289,12 @@ export default function AccountBar({
                 placeholder={referralRequired ? "required" : "the first diver may leave this blank"}
               />
             </label>
-            {refLocked ? <p className="meta">From your invite link. This code stays.</p> : null}
             <button className="solid" disabled={busy || !xHandle || (referralRequired && !referral.trim())} onClick={() => void confirm()}>
               {busy ? "Signing…" : "Confirm"}
             </button>
           </>
         )}
         {error ? <p className="error inline">{error}</p> : null}
-        <button className="menu-link" onClick={() => setStepOpen(false)}>
-          Close
-        </button>
       </div>
     </div>
   );
