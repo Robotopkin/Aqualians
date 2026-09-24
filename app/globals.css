@@ -113,24 +113,41 @@ h1 {
   color: transparent;
 }
 .head-side { display: flex; width: max-content; flex-direction: column; align-items: stretch; gap: 10px; }
-.account { position: relative; display: inline-block; }
-.account.viewer { min-width: 230px; }
-.account.viewer > .solid { position: relative; z-index: 7; width: 100%; }
-.account-panel {
-  position: absolute;
-  top: calc(100% - 12px);
-  left: 0;
+.account { position: relative; width: 220px; }
+.account-scroll {
+  position: relative;
   width: 100%;
-  z-index: 6;
-  box-sizing: border-box;
-  text-align: left;
+  min-height: 72px;
+}
+.account-scroll-content {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  min-height: 72px;
+  padding: 18px 20px;
+}
+.account-trigger {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--gold);
+  font-family: var(--font-display), "Cinzel", serif;
+  font-size: 17px;
+  font-weight: 600;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-panel {
+  width: 100%;
   display: grid;
   gap: 8px;
-  margin: 0;
-  padding-top: 26px;
-  overflow: visible;
-  border-radius: 0 0 22px 22px;
-  border-top: 0;
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  text-align: left;
   animation: drop-menu 160ms ease-out;
 }
 @keyframes drop-menu {
@@ -156,7 +173,6 @@ h1 {
   justify-content: space-between;
   gap: 12px;
 }
-.x-tag { min-width: 0; overflow: hidden; color: var(--foam); text-overflow: ellipsis; white-space: nowrap; }
 .account-role-icon { width: 30px; height: 30px; }
 .disconnect-link, .account-panel .disconnect-link { color: #ff8e86; }
 .disconnect-link:hover, .account-panel .disconnect-link:hover { color: #ffb0aa; }
@@ -632,10 +648,6 @@ h2 {
 }
 .field.stake-field { margin-top: 0; }
 .field.stake-field input { padding: 6px 9px; }
-.account .account-panel {
-  border-top: 0;
-  border-radius: 0 0 22px 22px;
-}
 .receipts { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 8px; }
 .receipts li { font-size: 12px; color: var(--mist); word-break: break-all; }
 .rules { margin-top: 18px; }

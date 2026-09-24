@@ -6,6 +6,7 @@ import { getAddress } from "viem";
 import { formatAura } from "@/lib/format";
 import { loginMessage, registerMessage } from "@/lib/messages";
 import type { PublicViewer, Role, TideResult } from "@/lib/types";
+import ScrollFrame from "./ScrollFrame";
 import TideNum from "./TideNum";
 import { TideNet, TideResultPicks } from "./TideResultDetails";
 import { connectWallet, disconnectWallet, signWallet, silentWallet, walletProvider } from "./wallet";
@@ -289,7 +290,7 @@ export default function AccountBar({
     setResult(null);
   }
 
-  const label = !wallet ? "Connect Wallet" : viewer ? `@${viewer.xHandle}` : short(wallet);
+  const label = !wallet ? "Connect Wallet" : viewer ? viewer.xHandle : short(wallet);
 
   const enterModal = (
     <div className="veil">
@@ -375,7 +376,6 @@ export default function AccountBar({
       <div className="card modal result-modal" role="dialog" aria-modal="true">
         <div className="kicker">Tide settled</div>
         <h2>{result.title}</h2>
-        <p className="meta">{result.question}</p>
         <TideResultPicks game={result} />
         <div className="result-modal-net"><TideNet game={result} /></div>
         <button className="solid" onClick={dismissResult}>
@@ -395,29 +395,33 @@ export default function AccountBar({
         if (viewer) setOpen(false);
       }}
     >
-      <button
-        className="solid"
-        disabled={busy && !wallet}
-        onClick={() => {
-          if (!wallet) void connect();
-          else if (!viewer) setStepOpen(true);
-          else setOpen((value) => !value);
-        }}
-      >
-        {busy && !wallet ? "Connecting…" : label}
-      </button>
-      {viewer && open ? (
-        <div className="card account-panel">
-          <span className="x-tag">@{viewer.xHandle}</span>
-          <a href="/profile" className="account-profile-link">
-            <span>Profile</span>
-            <img src={`/roles/${viewer.role}.png`} alt="" className="role-icon account-role-icon" />
-          </a>
-          <button className="menu-link disconnect-link" onClick={() => void disconnect()}>
-            Disconnect
+      <div className="account-scroll">
+        <ScrollFrame />
+        <div className="account-scroll-content">
+          <button
+            className="account-trigger"
+            disabled={busy && !wallet}
+            onClick={() => {
+              if (!wallet) void connect();
+              else if (!viewer) setStepOpen(true);
+              else setOpen((value) => !value);
+            }}
+          >
+            {busy && !wallet ? "Connecting…" : label}
           </button>
+          {viewer && open ? (
+            <div className="account-panel">
+              <a href="/profile" className="account-profile-link">
+                <span>Profile</span>
+                <img src={`/roles/${viewer.role}.png`} alt="" className="role-icon account-role-icon" />
+              </a>
+              <button className="menu-link disconnect-link" onClick={() => void disconnect()}>
+                Disconnect
+              </button>
+            </div>
+          ) : null}
         </div>
-      ) : null}
+      </div>
       {error && !stepOpen && !reveal ? <p className="error inline">{error}</p> : null}
       {mounted && reveal ? createPortal(revealModal, document.body) : null}
       {mounted && !reveal && wallet && !viewer && stepOpen ? createPortal(enterModal, document.body) : null}
