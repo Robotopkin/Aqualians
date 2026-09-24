@@ -620,6 +620,8 @@ export async function publicState(token: string | null): Promise<PublicState> {
     one("SELECT COUNT(*) AS n FROM users"),
     nansenStatus(now),
   ]);
+  const playing = new Set([`volume:${new Date(volume.start).toISOString()}`, `tx:${new Date(tx.start).toISOString()}`]);
+  const visible = open.filter((round) => playing.has(round.id));
   let viewer = viewerRow;
   let grant: PublicState["grant"] = null;
   if (viewerRow) {
@@ -629,7 +631,7 @@ export async function publicState(token: string | null): Promise<PublicState> {
   }
   const [card, rounds] = await Promise.all([
     viewer ? toViewer(viewer) : Promise.resolve(null),
-    Promise.all(open.map((round) => toRound(round, now, viewer))),
+    Promise.all(visible.map((round) => toRound(round, now, viewer))),
   ]);
   scheduleTide(now, open);
   return {

@@ -20,6 +20,19 @@ const MODE_NAME: Record<Mode, string> = {
 };
 const ROLL_MS = 2600;
 
+function shownRounds(rounds: PublicRound[], now: number) {
+  const picked = new Map<PublicRound["kind"], PublicRound>();
+  for (const round of rounds) {
+    const current = picked.get(round.kind);
+    const live = round.startsAt <= now && now < round.endsAt;
+    const currentLive = current != null && current.startsAt <= now && now < current.endsAt;
+    if (!current || (live && !currentLive) || (!live && !currentLive && round.startsAt > current.startsAt)) {
+      picked.set(round.kind, round);
+    }
+  }
+  return [...picked.values()].sort((a, b) => (a.kind === b.kind ? a.startsAt - b.startsAt : a.kind === "volume" ? -1 : 1));
+}
+
 function formatPct(n: number | null) {
   if (n == null) return "—";
   const pct = n * 100;
@@ -110,9 +123,7 @@ export default function Game() {
         {error ? <div className="error">{error}</div> : null}
 
         <section className="rounds">
-          {[...(state?.rounds ?? [])]
-            .sort((a, b) => (a.kind === b.kind ? a.startsAt - b.startsAt : a.kind === "volume" ? -1 : 1))
-            .map((round) => (
+          {shownRounds(state?.rounds ?? [], serverNow).map((round) => (
             <RoundCard
               key={round.kind}
               onExpire={load}
