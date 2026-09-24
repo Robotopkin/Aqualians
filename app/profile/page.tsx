@@ -30,7 +30,9 @@ export default function ProfilePage() {
   const viewerKey = state?.viewer?.address ?? "";
 
   useEffect(() => {
-    setOrigin(window.location.origin);
+    const host = window.location.hostname;
+    const local = host === "localhost" || host === "127.0.0.1";
+    setOrigin(local ? window.location.origin : "https://aqualians.space");
   }, []);
 
   useEffect(() => {
