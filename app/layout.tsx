@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Cinzel, Philosopher } from "next/font/google";
+import ClickSound from "@/components/ClickSound";
 import "./globals.css";
 
 const display = Cinzel({
@@ -23,6 +24,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${display.variable} ${sans.variable}`}>
       <body>
+        <ClickSound />
         {children}
         <a className="x-mark" href="https://x.com/Aqualians" target="_blank" rel="noreferrer" aria-label="Aqualians on X">
           <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true">
