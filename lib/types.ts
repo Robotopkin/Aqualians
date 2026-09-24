@@ -83,6 +83,7 @@ export type TideResult = {
   startsAt: number;
   status: "open" | "won" | "lost" | "returned";
   stake: number;
+  pool: number;
   profit: number;
   lost: number;
   picks: { title: string; amount: number; won: boolean | null }[];
@@ -90,6 +91,7 @@ export type TideResult = {
 
 export type ReferralRow = {
   xHandle: string;
+  role: Role;
   earned: number;
   joinedAt: string;
 };
@@ -97,6 +99,7 @@ export type ReferralRow = {
 export type LeaderboardRow = {
   rank: number;
   xHandle: string;
+  role: Role;
   aura: number;
   viewer: boolean;
 };

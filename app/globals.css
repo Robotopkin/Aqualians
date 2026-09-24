@@ -174,6 +174,7 @@ h1 {
   justify-items: start;
 }
 .modal h2 { margin: 0; }
+.modal.center { justify-items: center; text-align: center; }
 .x-link { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; }
 .error.inline { margin: 0; padding: 8px 10px; }
 
@@ -185,10 +186,13 @@ h1 {
   width: 100%;
   height: 100%;
   pointer-events: none;
-  transition: height 0.8s ease;
+  transition: height 2.6s cubic-bezier(0.45, 0.05, 0.25, 1);
 }
-.scroll-wrap.shut .scroll-stage { height: 64px; z-index: 4; }
-.scroll-wrap > .card { transition: clip-path 0.8s ease; }
+.scroll-wrap.shut .scroll-stage { height: 64px; }
+.scroll-wrap > .card {
+  clip-path: inset(0 0 0 0);
+  transition: clip-path 2.6s cubic-bezier(0.45, 0.05, 0.25, 1);
+}
 .scroll-wrap.shut > .card { clip-path: inset(0 0 calc(100% - 64px) 0); }
 .scroll-wrap > .card {
   position: relative;
@@ -217,7 +221,7 @@ h1 {
   position: absolute;
   left: -16px;
   top: 0;
-  z-index: 0;
+  z-index: 5;
   background: rgba(214, 244, 236, 0.2);
   backdrop-filter: blur(28px) saturate(1.15);
   -webkit-backdrop-filter: blur(28px) saturate(1.15);
@@ -225,7 +229,7 @@ h1 {
 .scroll-stroke {
   position: absolute;
   inset: 0;
-  z-index: 3;
+  z-index: 6;
   overflow: visible;
 }
 .history { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 12px; }
@@ -274,7 +278,14 @@ h1 {
   color: var(--gold);
 }
 .leaderboard-position { color: var(--mist); font-variant-numeric: tabular-nums; }
-.leaderboard-handle { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.person, .leaderboard-handle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.leaderboard-handle { overflow: hidden; }
+.leaderboard-handle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .leaderboard-aura { color: var(--foam); white-space: nowrap; font-size: 12px; font-variant-numeric: tabular-nums; }
 .profile-grid {
   display: grid;

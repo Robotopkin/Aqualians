@@ -321,7 +321,7 @@ export default function AccountBar({
 
   const giftModal = gift ? (
     <div className="veil">
-      <div className="card modal" role="dialog" aria-modal="true">
+      <div className="card modal center" role="dialog" aria-modal="true">
         <h2>Today’s Aura</h2>
         <TideNum value={formatAura(gift.amount)} />
         <button className="solid" onClick={dismissGift}>

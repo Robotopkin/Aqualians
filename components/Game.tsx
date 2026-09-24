@@ -18,6 +18,7 @@ const MODE_NAME: Record<Mode, string> = {
   growth: "Growth",
   movement: "Movement",
 };
+const ROLL_MS = 2600;
 
 function formatPct(n: number | null) {
   if (n == null) return "—";
@@ -148,7 +149,7 @@ export default function Game() {
           <summary>How a round works</summary>
           <p>
             {state?.rounds.some((round) => round.endsAt - round.startsAt < 60 * 60 * 1000)
-              ? "Test clock: each tide lasts 5 minutes and settles on a simulated result. Bets are open for the first half. Aura is granted every 5 minutes."
+              ? "Test clock: each tide lasts 5 minutes and settles on a simulated result. Bets are open for the first half. Aura is granted once each UTC day."
               : "Whale Hunt compares volume. It opens 00:00–12:00 UTC and settles at the next 00:00. Shrimp Gather compares transaction count. It opens 12:00–00:00 UTC and settles at 12:00. Each round compares its opening result with its closing result."}
           </p>
           <ul>
@@ -228,7 +229,7 @@ function RoundCard({
       tripped.current = false;
       setShown(round);
       setShut(false);
-    }, 800);
+    }, ROLL_MS);
     return () => window.clearTimeout(timer);
   }, [round, shown.id, shown.phase]);
   const view = shown;

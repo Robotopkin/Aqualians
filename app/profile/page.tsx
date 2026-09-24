@@ -127,11 +127,12 @@ export default function ProfilePage() {
                           <strong>{game.title}</strong>
                           <div className="meta">{game.question}</div>
                           <div className="meta">{new Date(game.startsAt).toISOString().slice(0, 16).replace("T", " ")} UTC</div>
+                          <div className="meta">You staked {formatAura(game.stake)} Aura · pool {formatAura(game.pool)} Aura</div>
                           <div className="profile-picks">
                             {game.picks.map((pick) => (
                               <span
                                 key={pick.title}
-                                className={`profile-pick${pick.won === true ? " won" : pick.won === false ? " lost" : ""}`}
+                                className={`profile-pick${pick.amount > 0 && pick.won === true ? " won" : pick.amount > 0 && pick.won === false ? " lost" : ""}`}
                               >
                                 {pick.title} <strong>{formatAura(pick.amount)}</strong>
                               </span>
@@ -173,7 +174,10 @@ export default function ProfilePage() {
                       <li key={row.xHandle}>
                         <div className="option-top">
                           <div>
-                            <strong>@{row.xHandle}</strong>
+                            <div className="person">
+                              <img src={`/roles/${row.role}.png`} alt="" className="role-icon" />
+                              <strong>{row.xHandle}</strong>
+                            </div>
                             <div className="meta">Joined {row.joinedAt.slice(0, 10)}</div>
                           </div>
                           {row.earned > 0 ? (
@@ -207,7 +211,10 @@ export default function ProfilePage() {
                       {leaderboard.rows.map((entry) => (
                         <li key={entry.xHandle} className={entry.viewer ? "viewer" : undefined}>
                           <span className="leaderboard-position">#{entry.rank}</span>
-                          <span className="leaderboard-handle">@{entry.xHandle}</span>
+                          <span className="leaderboard-handle">
+                            <img src={`/roles/${entry.role}.png`} alt="" className="role-icon" />
+                            <span>{entry.xHandle}</span>
+                          </span>
                           <span className="leaderboard-aura">{formatAura(entry.aura)} Aura</span>
                         </li>
                       ))}

@@ -781,7 +781,7 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
   const user = await sessionUser(token);
   if (!user) return null;
   const betRows = await rows(
-    `SELECT r.id, r.kind, r.mode, r.place, r.starts_at, r.status, r.result_json, b.category, b.amount, b.rank
+    `SELECT r.id, r.kind, r.mode, r.place, r.starts_at, r.status, r.result_json, r.categories, b.category, b.amount, b.rank
      FROM bets b JOIN rounds r ON r.id = b.round_id
      WHERE b.user_id = ?
      ORDER BY r.starts_at ASC, b.id ASC`,
@@ -805,6 +805,7 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
     }
   }
   const grouped = new Map<string, TideResult>();
+  const lineup = new Map<string, string[]>();
   for (const row of betRows) {
     const roundId = String(row.id);
     const settled = String(row.status) === "settled";
@@ -840,11 +841,17 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
         startsAt: Number(row.starts_at),
         status,
         stake: 0,
+        pool: 0,
         profit: settled && !refund ? (profitOf.get(roundId) ?? 0) : 0,
         lost: 0,
         picks: [],
       };
       grouped.set(roundId, game);
+      try {
+        lineup.set(roundId, JSON.parse(String(row.categories ?? "[]")) as string[]);
+      } catch {
+        lineup.set(roundId, []);
+      }
     } else if (pickWon) {
       game.status = "won";
     }
@@ -857,6 +864,19 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
       won: pickWon,
     });
   }
+  const pools = new Map<string, number>();
+  for (const row of await rows("SELECT round_id, amount FROM bets")) {
+    const id = String(row.round_id);
+    pools.set(id, (pools.get(id) ?? 0) + (Number(row.amount) || 0));
+  }
+  for (const game of grouped.values()) {
+    game.pool = pools.get(game.roundId) ?? game.stake;
+    const have = new Map(game.picks.map((pick) => [pick.title, pick]));
+    const titles = (lineup.get(game.roundId) ?? []).map((id) => categoryById(id)?.title ?? id);
+    if (titles.length) {
+      game.picks = titles.map((title) => have.get(title) ?? { title, amount: 0, won: null });
+    }
+  }
   return [...grouped.values()];
 }
 
@@ -864,7 +884,7 @@ export async function referralsFor(token: string): Promise<{ code: string; rows:
   const user = await sessionUser(token);
   if (!user) return null;
   const people = await rows(
-    `SELECT u.id, u.x_handle, u.created_at
+    `SELECT u.id, u.x_handle, u.role, u.created_at
      FROM users u
      WHERE u.referrer_id = ?
      ORDER BY u.created_at ASC`,
@@ -874,6 +894,7 @@ export async function referralsFor(token: string): Promise<{ code: string; rows:
   for (const row of people) {
     map.set(Number(row.id), {
       xHandle: String(row.x_handle),
+      role: (String(row.role) || "shrimp") as Role,
       earned: 0,
       joinedAt: String(row.created_at),
     });
@@ -902,6 +923,7 @@ export async function referralsFor(token: string): Promise<{ code: string; rows:
 type CachedLeaderboardRow = {
   userId: number;
   xHandle: string;
+  role: Role;
   aura: number;
 };
 
@@ -920,14 +942,15 @@ export async function leaderboardFor(token: string): Promise<LeaderboardBoard | 
   } catch {
     cached = null;
   }
-  const stale = !cached || now - cached.refreshedAt >= 60 * 60 * 1000;
+  const stale = !cached || cached.rows.some((row) => !row.role) || now - cached.refreshedAt >= 60 * 60 * 1000;
   const missingViewer = !cached?.rows.some((row) => row.userId === user.id);
   if (stale || missingViewer) {
     cached = {
       refreshedAt: now,
-      rows: (await rows("SELECT id, x_handle, aura FROM users ORDER BY aura DESC, id ASC")).map((row) => ({
+      rows: (await rows("SELECT id, x_handle, role, aura FROM users ORDER BY aura DESC, id ASC")).map((row) => ({
         userId: Number(row.id),
         xHandle: String(row.x_handle),
+        role: (String(row.role) || "shrimp") as Role,
         aura: Math.floor(Number(row.aura)),
       })),
     };
@@ -941,6 +964,7 @@ export async function leaderboardFor(token: string): Promise<LeaderboardBoard | 
     rows: board.rows.slice(0, 50).map((row, index) => ({
       rank: index + 1,
       xHandle: row.xHandle,
+      role: row.role,
       aura: row.aura,
       viewer: row.userId === user.id,
     })),

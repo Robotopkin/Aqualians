@@ -207,10 +207,10 @@ async function selectJoin(sql: string, params: unknown[]): Promise<SqlRow[]> {
     const row = Array.isArray(user) ? user[0] : user;
     return row ? [coerce(row)] : [];
   }
-  if (sql.startsWith("SELECT r.id, r.kind, r.mode, r.place, r.starts_at, r.status, r.result_json, b.category, b.amount, b.rank")) {
+  if (sql.startsWith("SELECT r.id, r.kind, r.mode, r.place, r.starts_at, r.status, r.result_json, r.categories, b.category, b.amount, b.rank")) {
     const { data, error } = await supabase()
       .from("bets")
-      .select("id, category, amount, rank, rounds(id, kind, mode, place, starts_at, status, result_json)")
+      .select("id, category, amount, rank, rounds(id, kind, mode, place, starts_at, status, result_json, categories)")
       .eq("user_id", params[0])
       .order("id", { ascending: true });
     raise(error);
@@ -227,6 +227,7 @@ async function selectJoin(sql: string, params: unknown[]): Promise<SqlRow[]> {
           starts_at: joined.starts_at,
           status: joined.status,
           result_json: joined.result_json,
+          categories: joined.categories,
           category: row.category,
           amount: row.amount,
           rank: row.rank,

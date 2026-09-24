@@ -19,10 +19,7 @@ export function utcDayKey(now: number) {
 }
 
 export function grantKey(now: number) {
-  const span = roundSpan();
-  if (span >= DAY) return utcDayKey(now);
-  const slot = Math.floor(now / span) * span;
-  return new Date(slot).toISOString();
+  return utcDayKey(now);
 }
 
 export type Window = { start: number; betsClose: number; end: number };
