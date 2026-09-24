@@ -15,6 +15,18 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
+html {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(126, 231, 255, 0.72) rgba(4, 20, 28, 0.72);
+}
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: rgba(4, 20, 28, 0.72); }
+*::-webkit-scrollbar-thumb {
+  border: 2px solid rgba(4, 20, 28, 0.9);
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--dolphin), var(--whale), var(--gold));
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--gold); }
 body {
   font-family: var(--font-sans), "Philosopher", serif;
   color: var(--foam);
@@ -321,6 +333,13 @@ h1 {
 .net-profit { color: #7dffa8; }
 .result-modal { width: min(680px, 100%); }
 .result-modal .profile-picks { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.result-question {
+  margin: 0;
+  color: var(--foam);
+  font-family: var(--font-display), "Cinzel", serif;
+  font-size: 21px;
+  line-height: 1.35;
+}
 .result-modal-net { font-family: var(--font-display), "Cinzel", serif; font-size: 28px; }
 .leaderboard-rank {
   margin: 10px 0 4px;

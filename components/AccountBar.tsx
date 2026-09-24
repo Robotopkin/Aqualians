@@ -376,6 +376,7 @@ export default function AccountBar({
       <div className="card modal result-modal" role="dialog" aria-modal="true">
         <div className="kicker">Tide settled</div>
         <h2>{result.title}</h2>
+        <p className="result-question">{result.question}</p>
         <TideResultPicks game={result} />
         <div className="result-modal-net"><TideNet game={result} /></div>
         <button className="solid" onClick={dismissResult}>
