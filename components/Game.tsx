@@ -159,13 +159,28 @@ export default function Game() {
         <details className="rules">
           <summary>How a round works</summary>
           <p>
-            {state?.rounds.some((round) => round.endsAt - round.startsAt < 60 * 60 * 1000)
-              ? "Test clock: each tide lasts 5 minutes and settles on a simulated result. Bets are open for the first half. Aura is granted once each UTC day."
-              : "Whale Hunt compares volume. It opens 00:00–12:00 UTC and settles at the next 00:00. Shrimp Gather compares transaction count. It opens 12:00–00:00 UTC and settles at 12:00. Each round compares its opening result with its closing result."}
+            Aqualians groups tokens into sectors such as NFT, DeFi, Meme, Stablecoin, AI, RWA, and Gaming. Each tide
+            selects four sectors and asks which one will finish in a specific place, from 1st to 4th.
+          </p>
+          <p>
+            At the opening of a tide, the sea records one data print for every sector in play. At settlement it records
+            the closing print and compares the two. These prints use Nansen data; there is no live progress between them.
           </p>
           <ul>
+            <li>
+              Whale Hunt compares the total trading volume of all tracked tokens in each sector. It opens at 00:00 UTC,
+              accepts bets until 12:00, and settles at the next 00:00.
+            </li>
+            <li>
+              Shrimp Gather compares the total number of buys and sells across all tracked tokens in each sector. It opens
+              at 12:00 UTC, accepts bets until 00:00, and settles at the next 12:00.
+            </li>
             <li>Growth ranks the biggest gain as 1st. If every category is down, 1st is the smallest drop. The round asks which category takes one place, 1st through 4th.</li>
             <li>Movement ranks the largest absolute percent as 1st, up or down. The smallest move is 4th. The round asks for one place the same way.</li>
+            <li>
+              Stakes lock as soon as they are signed. Correct stakes share the entire Aura pool in proportion to their
+              payout weight. If nobody picked the winning sector, every stake is returned.
+            </li>
             <li className="role-rule">
               <img src="/roles/shrimp.png" alt="" className="role-icon" />
               <span>Shrimp see how other shrimp split their stakes.</span>
