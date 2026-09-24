@@ -1,7 +1,8 @@
-import { loadEnvConfig } from "@next/env";
+import nextEnv from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 
 const CONFIRMATION = "--confirm-production-reset";
+const { loadEnvConfig } = nextEnv;
 
 if (!process.argv.includes(CONFIRMATION)) {
   throw new Error(`Refusing to clear Supabase without ${CONFIRMATION}`);
