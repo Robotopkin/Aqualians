@@ -166,10 +166,22 @@ export default function Game() {
           <ul>
             <li>Growth ranks the biggest gain as 1st. If every category is down, 1st is the smallest drop. The round asks which category takes one place, 1st through 4th.</li>
             <li>Movement ranks the largest absolute percent as 1st, up or down. The smallest move is 4th. The round asks for one place the same way.</li>
-            <li>Shrimp see how other shrimp split their stakes.</li>
-            <li>Dolphin sees yesterday’s result for these categories.</li>
-            <li>Shark winning stakes count as 5% heavier.</li>
-            <li>The option whales backed most is lit for everyone.</li>
+            <li className="role-rule">
+              <img src="/roles/shrimp.png" alt="" className="role-icon" />
+              <span>Shrimp see how other shrimp split their stakes.</span>
+            </li>
+            <li className="role-rule">
+              <img src="/roles/dolphin.png" alt="" className="role-icon" />
+              <span>Dolphin sees yesterday’s result for these categories.</span>
+            </li>
+            <li className="role-rule">
+              <img src="/roles/shark.png" alt="" className="role-icon" />
+              <span>Shark winning stakes count as 5% heavier.</span>
+            </li>
+            <li className="role-rule">
+              <img src="/roles/whale.png" alt="" className="role-icon" />
+              <span>The option whales backed most is lit for everyone.</span>
+            </li>
           </ul>
         </details>
       </main>

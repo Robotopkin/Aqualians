@@ -615,6 +615,14 @@ h2 {
 .rules { margin-top: 18px; }
 .rules summary { cursor: pointer; color: var(--gold); }
 .rules p, .rules li { color: var(--mist); line-height: 1.5; }
+.rules li.role-rule {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  list-style: none;
+  margin-left: -26px;
+}
+.rules li.role-rule .role-icon { width: 18px; height: 18px; margin-top: 2px; }
 .foot { margin-top: 18px; color: var(--mist); font-size: 12px; line-height: 1.5; }
 .x-mark {
   position: fixed;
