@@ -4,7 +4,7 @@ import { useEffect } from "react";
 
 const DROPS = [
   { src: "/drop.mp3", volume: 0.2 },
-  { src: "/drop-2.mp3", volume: 0.1 },
+  { src: "/drop-2.mp3", volume: 0.05 },
   { src: "/drop-3.mp3", volume: 0.2 },
   { src: "/drop-4.mp3", volume: 0.2 },
   { src: "/drop-6.mp3", volume: 0.2 },
