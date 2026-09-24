@@ -267,6 +267,33 @@ h1 {
   transition: clip-path 2.6s cubic-bezier(0.45, 0.05, 0.25, 1);
 }
 .scroll-wrap.shut > .card { clip-path: inset(0 0 calc(100% - 64px) 0); }
+.prelaunch-scroll {
+  height: 122px !important;
+  min-height: 122px !important;
+}
+.prelaunch-scroll > .card {
+  height: 64px;
+  min-height: 64px;
+  padding: 0;
+}
+.prelaunch-countdown {
+  position: absolute;
+  top: 76px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  color: var(--mist);
+  font-size: 14px;
+  pointer-events: none;
+}
+.prelaunch-countdown strong {
+  min-width: 8ch;
+  color: var(--gold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.08em;
+}
 .scroll-wrap > .card {
   position: relative;
   z-index: 1;

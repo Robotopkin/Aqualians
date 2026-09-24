@@ -132,6 +132,7 @@ export type PublicState = {
   viewer: PublicViewer | null;
   referralRequired: boolean;
   grant: { amount: number; day: string } | null;
+  launches: Record<Kind, number>;
   rounds: PublicRound[];
 };
 

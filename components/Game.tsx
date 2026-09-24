@@ -5,7 +5,7 @@ import { getAddress } from "viem";
 import { placeLabel } from "@/lib/categories";
 import { formatAura } from "@/lib/format";
 import { betMessage } from "@/lib/messages";
-import type { BetLine, CategoryId, Mode, PublicCategory, PublicRound } from "@/lib/types";
+import type { BetLine, CategoryId, Kind, Mode, PublicCategory, PublicRound } from "@/lib/types";
 import SeaBackground from "./SeaBackground";
 import SiteHeader from "./SiteHeader";
 import ScrollFrame from "./ScrollFrame";
@@ -19,6 +19,7 @@ const MODE_NAME: Record<Mode, string> = {
   movement: "Movement",
 };
 const ROLL_MS = 2600;
+const ROUND_KINDS: Kind[] = ["volume", "tx"];
 
 function shownRounds(rounds: PublicRound[], now: number) {
   const picked = new Map<PublicRound["kind"], PublicRound>();
@@ -49,10 +50,21 @@ function formatRemain(ms: number, fast: boolean) {
   return `${minutes}m`;
 }
 
+function formatLaunchRemain(ms: number) {
+  const seconds = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  const rest = seconds % 60;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(rest).padStart(2, "0")}`;
+}
+
 export default function Game() {
   const { state, serverNow, error, setError, load, ready } = useSea();
   const [busy, setBusy] = useState(false);
   const [slips, setSlips] = useState<Record<string, Record<string, { amount: string; rank: number }>>>({});
+  const visibleRounds = shownRounds(state?.rounds ?? [], serverNow);
+  const roundByKind = new Map(visibleRounds.map((round) => [round.kind, round]));
+  const launches = state?.launches ?? { volume: 0, tx: 0 };
 
   useEffect(() => {
     if (!state) return;
@@ -123,31 +135,41 @@ export default function Game() {
         {error ? <div className="error">{error}</div> : null}
 
         <section className="rounds">
-          {shownRounds(state?.rounds ?? [], serverNow).map((round) => (
-            <RoundCard
-              key={round.kind}
-              onExpire={load}
-              round={round}
-              now={serverNow}
-              aura={state?.viewer?.aura ?? 0}
-              signedIn={Boolean(state?.viewer)}
-              slip={slips[round.id] ?? {}}
-              busy={busy}
-              onSlip={(category, patch) =>
-                setSlips((prev) => {
-                  const current = prev[round.id]?.[category] ?? { amount: "", rank: 1 };
-                  return {
-                    ...prev,
-                    [round.id]: {
-                      ...prev[round.id],
-                      [category]: { ...current, ...patch },
-                    },
-                  };
-                })
-              }
-              onCast={() => void cast(round)}
-            />
-          ))}
+          {state
+            ? ROUND_KINDS.map((kind) => {
+                const round = roundByKind.get(kind);
+                if (!round) {
+                  return <PrelaunchScroll key={kind} kind={kind} startsAt={launches[kind]} now={serverNow} />;
+                }
+                const launch = launches[kind];
+                return (
+                  <RoundCard
+                    key={kind}
+                    onExpire={load}
+                    round={round}
+                    now={serverNow}
+                    aura={state.viewer?.aura ?? 0}
+                    signedIn={Boolean(state.viewer)}
+                    slip={slips[round.id] ?? {}}
+                    busy={busy}
+                    revealOnMount={launch > 0 && round.startsAt === launch && serverNow - launch < 30_000}
+                    onSlip={(category, patch) =>
+                      setSlips((prev) => {
+                        const current = prev[round.id]?.[category] ?? { amount: "", rank: 1 };
+                        return {
+                          ...prev,
+                          [round.id]: {
+                            ...prev[round.id],
+                            [category]: { ...current, ...patch },
+                          },
+                        };
+                      })
+                    }
+                    onCast={() => void cast(round)}
+                  />
+                );
+              })
+            : null}
           {ready && !state ? (
             <div className="scroll-wrap">
               <ScrollFrame />
@@ -204,6 +226,22 @@ export default function Game() {
   );
 }
 
+function PrelaunchScroll({ kind, startsAt, now }: { kind: Kind; startsAt: number; now: number }) {
+  const title = kind === "volume" ? "Whale Hunt" : "Shrimp Gather";
+  return (
+    <div className="scroll-wrap shut prelaunch-scroll">
+      <div className="scroll-stage">
+        <ScrollFrame />
+      </div>
+      <article className="card" aria-hidden />
+      <div className="prelaunch-countdown">
+        <span>{title} opens in</span>
+        <strong>{formatLaunchRemain(startsAt - now)}</strong>
+      </div>
+    </div>
+  );
+}
+
 function RoleMark({ category }: { category: PublicCategory }) {
   if (category.shrimpShare != null) {
     return (
@@ -236,6 +274,7 @@ function RoundCard({
   onSlip,
   onCast,
   onExpire,
+  revealOnMount,
 }: {
   round: PublicRound;
   now: number;
@@ -246,10 +285,16 @@ function RoundCard({
   onSlip: (category: CategoryId, patch: Partial<{ amount: string; rank: number }>) => void;
   onCast: () => void;
   onExpire: () => void;
+  revealOnMount: boolean;
 }) {
   const [shown, setShown] = useState(round);
-  const [shut, setShut] = useState(false);
+  const [shut, setShut] = useState(revealOnMount);
   const tripped = useRef(false);
+  useEffect(() => {
+    if (!revealOnMount) return;
+    const timer = window.setTimeout(() => setShut(false), 50);
+    return () => window.clearTimeout(timer);
+  }, [revealOnMount]);
   useEffect(() => {
     const due = shown.phase === "betting" ? shown.betsCloseAt : shown.endsAt;
     if (now < due || tripped.current) return;

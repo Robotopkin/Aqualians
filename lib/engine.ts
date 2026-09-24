@@ -15,7 +15,7 @@ import { settle } from "./payout";
 import { classifyWallet } from "./roles";
 import { rankCategories, relativeChange } from "./score";
 import { ensureServerAccount, serverAccount, signReceipt } from "./server-wallet";
-import { activeTxWindow, activeVolumeWindow, grantKey, phaseOf, roundSpan } from "./time";
+import { activeTxWindow, activeVolumeWindow, grantKey, launchSchedule, phaseOf, roundSpan } from "./time";
 import type { BetLine, CategoryId, Kind, LeaderboardBoard, Mode, PublicState, Reading, ReferralRow, Role, RoleEvidence, StoredBet, TideResult } from "./types";
 
 type RoundRow = {
@@ -85,7 +85,9 @@ async function closeStaleRounds(now: number) {
 let tideJob: Promise<void> | null = null;
 
 function scheduleTide(now: number, open: RoundRow[]) {
-  const due = open.length < 2 || open.some((round) => !round.baseline_json || round.ends_at <= now);
+  const launches = launchSchedule();
+  const expected = Number(launches.volume === 0 || now >= launches.volume) + Number(launches.tx === 0 || now >= launches.tx);
+  const due = open.length < expected || open.some((round) => !round.baseline_json || round.ends_at <= now);
   if (!due || tideJob) return;
   tideJob = runTick()
     .catch((err: unknown) => console.error("tide", err instanceof Error ? err.message : err))
@@ -100,11 +102,14 @@ export function pendingTide() {
 
 async function tick() {
   const now = Date.now();
+  const launches = launchSchedule();
+  const volume = activeVolumeWindow(now);
+  const tx = activeTxWindow(now);
   await rollPlaces();
   await collapseDuplicateCredits();
   await closeStaleRounds(now);
-  await ensureRound("volume", activeVolumeWindow(now));
-  await ensureRound("tx", activeTxWindow(now));
+  if (launches.volume === 0 || volume.start >= launches.volume) await ensureRound("volume", volume);
+  if (launches.tx === 0 || tx.start >= launches.tx) await ensureRound("tx", tx);
   await refreshReadings(now);
   const ended = (await rows("SELECT * FROM rounds WHERE status = 'open' AND ends_at <= ?", now)) as unknown as RoundRow[];
   const settling = (await rows("SELECT * FROM rounds WHERE status = 'settling'")) as unknown as RoundRow[];
@@ -703,9 +708,13 @@ export async function publicState(token: string | null): Promise<PublicState> {
   const now = Date.now();
   const volume = activeVolumeWindow(now);
   const tx = activeTxWindow(now);
+  const launches = launchSchedule();
   await ensureServerAccount();
   await closeStaleRounds(now);
-  await Promise.all([ensureRound("volume", volume), ensureRound("tx", tx)]);
+  await Promise.all([
+    launches.volume === 0 || volume.start >= launches.volume ? ensureRound("volume", volume) : Promise.resolve(),
+    launches.tx === 0 || tx.start >= launches.tx ? ensureRound("tx", tx) : Promise.resolve(),
+  ]);
   const [viewerRow, open, population, nansen] = await Promise.all([
     token ? sessionUser(token) : Promise.resolve(null),
     rows("SELECT * FROM rounds WHERE status = 'open' ORDER BY starts_at ASC") as Promise<unknown> as Promise<RoundRow[]>,
@@ -733,6 +742,7 @@ export async function publicState(token: string | null): Promise<PublicState> {
     viewer: card,
     referralRequired: Number(population?.n ?? 0) > 0,
     grant,
+    launches,
     rounds,
   };
 }

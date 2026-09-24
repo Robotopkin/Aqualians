@@ -4,7 +4,7 @@ import { settle } from "../lib/payout.ts";
 import { normalizeWinRate, roleFromStats } from "../lib/roles.ts";
 import { CATEGORIES, simulatedPair } from "../lib/categories.ts";
 import { rankCategories, relativeChange } from "../lib/score.ts";
-import { activeTxWindow, activeVolumeWindow } from "../lib/time.ts";
+import { activeTxWindow, activeVolumeWindow, launchAt, launchSchedule } from "../lib/time.ts";
 import type { StoredBet } from "../lib/types.ts";
 
 function bet(partial: Partial<StoredBet> & Pick<StoredBet, "id" | "userId" | "amount" | "category" | "rank">): StoredBet {
@@ -36,6 +36,23 @@ assert.ok(fast.start <= noon && noon < fast.end);
 const fastTx = activeTxWindow(noon);
 assert.equal(fastTx.end - fastTx.start, 300_000);
 assert.equal(fastTx.start % 300_000, 150_000);
+process.env.AURASEA_ROUND_MS = "0";
+
+process.env.AURASEA_LAUNCH_AT = "2026-09-25T00:00:00.000Z";
+assert.equal(launchAt(), Date.UTC(2026, 8, 25));
+assert.deepEqual(launchSchedule(), {
+  volume: Date.UTC(2026, 8, 25),
+  tx: Date.UTC(2026, 8, 25, 12),
+});
+delete process.env.AURASEA_LAUNCH_AT;
+
+delete process.env.AURASEA_ROUND_MS;
+assert.equal(activeVolumeWindow(noon).end - activeVolumeWindow(noon).start, 24 * 60 * 60 * 1000);
+process.env.VERCEL = "1";
+process.env.AURASEA_ROUND_MS = "300000";
+assert.equal(activeVolumeWindow(noon).end - activeVolumeWindow(noon).start, 24 * 60 * 60 * 1000);
+assert.equal(launchAt(), Date.UTC(2026, 8, 25));
+delete process.env.VERCEL;
 process.env.AURASEA_ROUND_MS = "0";
 
 const simStart = Date.UTC(2026, 8, 24, 8, 0, 0);

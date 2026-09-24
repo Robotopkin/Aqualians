@@ -1,12 +1,29 @@
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
+const PRODUCTION_LAUNCH_AT = Date.UTC(2026, 8, 25);
 
 export function roundSpan() {
+  if (process.env.VERCEL) return DAY;
   const raw = process.env.AURASEA_ROUND_MS;
   if (raw === "0") return DAY;
-  const n = Number(raw ?? 5 * 60 * 1000);
-  if (!Number.isFinite(n) || n < 60_000) return 5 * 60 * 1000;
+  if (raw == null || raw.trim() === "") return DAY;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 60_000) return DAY;
   return Math.floor(n);
+}
+
+export function launchAt() {
+  const raw = process.env.AURASEA_LAUNCH_AT?.trim();
+  if (!raw) return process.env.VERCEL ? PRODUCTION_LAUNCH_AT : 0;
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric) && numeric >= 0) return Math.floor(numeric);
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function launchSchedule() {
+  const volume = launchAt();
+  return { volume, tx: volume > 0 ? volume + DAY / 2 : 0 };
 }
 
 export function utcMidnight(now: number) {
