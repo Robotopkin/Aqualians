@@ -1007,7 +1007,7 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
       });
     }
   }
-  return [...grouped.values()];
+  return [...grouped.values()].sort((a, b) => b.startsAt - a.startsAt);
 }
 
 export async function referralsFor(token: string): Promise<{ code: string; rows: ReferralRow[] } | null> {
@@ -1054,7 +1054,10 @@ export async function referralsFor(token: string): Promise<{ code: string; rows:
     if (current) current.earned += entry.earned;
     else unique.set(key, { ...entry });
   }
-  return { code: user.referral_code, rows: [...unique.values()] };
+  return {
+    code: user.referral_code,
+    rows: [...unique.values()].sort((a, b) => b.earned - a.earned || a.joinedAt.localeCompare(b.joinedAt)),
+  };
 }
 
 type CachedLeaderboardRow = {
