@@ -166,7 +166,7 @@ export default function ProfilePage() {
                     <input readOnly value={link} onFocus={(event) => event.currentTarget.select()} />
                   </label>
                 ) : null}
-                {rows && rows.length === 0 ? <p className="meta">No referrals have earned Aura yet.</p> : null}
+                {rows && rows.length === 0 ? <p className="meta">Nobody has entered with your link yet.</p> : null}
                 {rows && rows.length > 0 ? (
                   <ul className="history">
                     {rows.map((row) => (
@@ -176,7 +176,11 @@ export default function ProfilePage() {
                             <strong>@{row.xHandle}</strong>
                             <div className="meta">Joined {row.joinedAt.slice(0, 10)}</div>
                           </div>
-                          <div className="net-profit">+{formatAura(row.earned)} Aura</div>
+                          {row.earned > 0 ? (
+                            <div className="net-profit">+{formatAura(row.earned)} Aura</div>
+                          ) : (
+                            <div className="meta">No profit yet</div>
+                          )}
                         </div>
                       </li>
                     ))}

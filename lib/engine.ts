@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 import { verifyMessage } from "viem";
-import { categoryById, demoReading, isCategoryId, pickPlace, pickRoundSetup, roundQuestion, roundTitle } from "./categories";
+import { categoryById, demoReading, isCategoryId, pickPlace, pickRoundSetup, roundQuestion, roundTitle, simulatedPair } from "./categories";
 import {
   DAILY_AURA,
   nansenKey,
@@ -163,10 +163,13 @@ async function refreshReadings(now: number) {
   const categoriesDue = [...needed];
   if (!categoriesDue.length) return;
 
-  if (!nansenKey()) {
-    await demoFill(categoriesDue, now);
-    await metaSet("last_poll_at", String(now));
-    await applyCache(due, "demo", now);
+  if (roundSpan() < 24 * 60 * 60 * 1000 || !nansenKey()) {
+    if (roundSpan() < 24 * 60 * 60 * 1000) await applySimulated(due, now);
+    else {
+      await demoFill(categoriesDue, now);
+      await metaSet("last_poll_at", String(now));
+      await applyCache(due, "demo", now);
+    }
     return;
   }
 
@@ -178,6 +181,42 @@ async function refreshReadings(now: number) {
   );
   await metaSet("last_poll_at", String(now));
   await applyCache(due, "live", now);
+}
+
+async function applySimulated(open: RoundRow[], now: number) {
+  for (const round of open) {
+    const categories = JSON.parse(round.categories) as CategoryId[];
+    const reset = round.reading_source !== "demo";
+    const baseline = reset ? {} : parseReadings(round.baseline_json);
+    const latest = reset ? {} : parseReadings(round.latest_json);
+    let touched = reset;
+    for (const category of categories) {
+      const pair = simulatedPair(category, round.starts_at);
+      if (!baseline[category]) {
+        baseline[category] = pair.open;
+        touched = true;
+      }
+      const next = round.ends_at <= now ? pair.close : baseline[category]!;
+      const prev = latest[category];
+      if (!prev || prev.volume !== next.volume || prev.tx !== next.tx) {
+        latest[category] = next;
+        touched = true;
+      }
+    }
+    if (!touched) continue;
+    const baselineAt = reset || !round.baseline_at ? round.starts_at : round.baseline_at;
+    await run(
+      `UPDATE rounds
+       SET baseline_json = ?, latest_json = ?, baseline_at = ?, latest_at = ?, reading_source = ?
+       WHERE id = ?`,
+      JSON.stringify(baseline),
+      JSON.stringify(latest),
+      baselineAt,
+      now,
+      "demo",
+      round.id,
+    );
+  }
 }
 
 async function applyCache(open: RoundRow[], source: "demo" | "live", now: number) {
@@ -852,7 +891,6 @@ export async function referralsFor(token: string): Promise<{ code: string; rows:
   }
   const unique = new Map<string, ReferralRow>();
   for (const entry of map.values()) {
-    if (entry.earned <= 0) continue;
     const key = entry.xHandle.toLowerCase();
     const current = unique.get(key);
     if (current) current.earned += entry.earned;

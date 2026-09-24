@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { shrimpTide, whaleSpotlight } from "../lib/crowd.ts";
 import { settle } from "../lib/payout.ts";
 import { normalizeWinRate, roleFromStats } from "../lib/roles.ts";
+import { CATEGORIES, simulatedPair } from "../lib/categories.ts";
 import { rankCategories, relativeChange } from "../lib/score.ts";
 import { activeTxWindow, activeVolumeWindow } from "../lib/time.ts";
 import type { StoredBet } from "../lib/types.ts";
@@ -36,6 +37,14 @@ const fastTx = activeTxWindow(noon);
 assert.equal(fastTx.end - fastTx.start, 300_000);
 assert.equal(fastTx.start % 300_000, 150_000);
 process.env.AURASEA_ROUND_MS = "0";
+
+const simStart = Date.UTC(2026, 8, 24, 8, 0, 0);
+const simChanges = CATEGORIES.map((row) => {
+  const pair = simulatedPair(row.id, simStart);
+  return { category: row.id, change: (pair.close.volume - pair.open.volume) / pair.open.volume };
+});
+const simRanks = rankCategories("movement", simChanges);
+assert.equal(new Set(simRanks.map((row) => row.rank)).size, CATEGORIES.length);
 
 assert.equal(relativeChange(100, 110), 0.1);
 assert.equal(relativeChange(0, 5), 1);

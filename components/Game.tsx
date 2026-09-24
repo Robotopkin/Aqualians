@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getAddress } from "viem";
 import { placeLabel } from "@/lib/categories";
 import { formatAura } from "@/lib/format";
@@ -113,7 +113,8 @@ export default function Game() {
             .sort((a, b) => (a.kind === b.kind ? a.startsAt - b.startsAt : a.kind === "volume" ? -1 : 1))
             .map((round) => (
             <RoundCard
-              key={round.id}
+              key={round.kind}
+              onExpire={load}
               round={round}
               now={serverNow}
               aura={state?.viewer?.aura ?? 0}
@@ -147,7 +148,7 @@ export default function Game() {
           <summary>How a round works</summary>
           <p>
             {state?.rounds.some((round) => round.endsAt - round.startsAt < 60 * 60 * 1000)
-              ? "Test clock: each tide lasts 5 minutes. Bets are open for the first half, then the tide settles. Aura is granted every 5 minutes."
+              ? "Test clock: each tide lasts 5 minutes and settles on a simulated result. Bets are open for the first half. Aura is granted every 5 minutes."
               : "Whale Hunt compares volume. It opens 00:00–12:00 UTC and settles at the next 00:00. Shrimp Gather compares transaction count. It opens 12:00–00:00 UTC and settles at 12:00. Each round compares its opening result with its closing result."}
           </p>
           <ul>
@@ -195,6 +196,7 @@ function RoundCard({
   busy,
   onSlip,
   onCast,
+  onExpire,
 }: {
   round: PublicRound;
   now: number;
@@ -204,41 +206,68 @@ function RoundCard({
   busy: boolean;
   onSlip: (category: CategoryId, patch: Partial<{ amount: string; rank: number }>) => void;
   onCast: () => void;
+  onExpire: () => void;
 }) {
-  const target = round.phase === "betting" ? round.betsCloseAt : round.endsAt;
-  const stake = round.categories.reduce((sum, category) => sum + (Number.parseInt(slip[category.id]?.amount || "0", 10) || 0), 0);
+  const [shown, setShown] = useState(round);
+  const [shut, setShut] = useState(false);
+  const tripped = useRef(false);
+  useEffect(() => {
+    const due = shown.phase === "betting" ? shown.betsCloseAt : shown.endsAt;
+    if (now < due || tripped.current) return;
+    tripped.current = true;
+    setShut(true);
+    onExpire();
+  }, [now, shown, onExpire]);
+  useEffect(() => {
+    if (round.id === shown.id && round.phase === shown.phase) {
+      setShown(round);
+      return;
+    }
+    setShut(true);
+    const timer = window.setTimeout(() => {
+      tripped.current = false;
+      setShown(round);
+      setShut(false);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [round, shown.id, shown.phase]);
+  const view = shown;
+  const target = view.phase === "betting" ? view.betsCloseAt : view.endsAt;
+  const stake = view.categories.reduce((sum, category) => sum + (Number.parseInt(slip[category.id]?.amount || "0", 10) || 0), 0);
   const free = Math.floor(aura);
-  const canBet = round.phase === "betting" && signedIn;
+  const canBet = view.phase === "betting" && signedIn && !shut && view.id === round.id;
   return (
-    <div className="scroll-wrap">
-      <ScrollFrame />
+    <div className={`scroll-wrap${shut ? " shut" : ""}`}>
+      <div className="scroll-stage">
+        <ScrollFrame />
+      </div>
       <article className="card">
       <div className="card-head">
         <div>
           <div className="kicker">
-            {round.kind === "volume" ? "Volume" : "Transaction count"} · {MODE_NAME[round.mode]} · {placeLabel(round.place)} place
+            {view.kind === "volume" ? "Volume" : "Transaction count"} · {MODE_NAME[view.mode]} · {placeLabel(view.place)} place
             {" · "}
-            <span className={round.phase === "betting" ? "tide-open" : "tide-closed"}>
-              {round.phase === "betting" ? "open" : "closed"}
+            <span className={view.phase === "betting" ? "tide-open" : "tide-closed"}>
+              {view.phase === "betting" ? "open" : "closed"}
             </span>
           </div>
-          <h2>{round.title}</h2>
-          <p className="question">{round.question}</p>
+          <h2>{view.title}</h2>
+          <p className="question">{view.question}</p>
           <p className="meta">
-            Pool {formatAura(round.poolTotal)} Aura · {round.betCount} bets in the water
-            {round.late ? " · the opening print was late because the server was down" : ""}
-            {round.shrimpVeil
-              ? ` · shrimp bets: ${round.shrimpVeil.bets}${round.shrimpVeil.veiled ? ", still an even 25%" : ""}`
+            Pool {formatAura(view.poolTotal)} Aura · {view.betCount} bets in the water
+            {view.late ? " · the opening print was late because the server was down" : ""}
+            {view.shrimpVeil
+              ? ` · shrimp bets: ${view.shrimpVeil.bets}${view.shrimpVeil.veiled ? ", still an even 25%" : ""}`
               : ""}
           </p>
         </div>
         <div className="round-status">
-          <div className="count">{formatRemain(target - now, round.endsAt - round.startsAt < 60 * 60 * 1000)}</div>
+          <div className="count">{formatRemain(target - now, view.endsAt - view.startsAt < 60 * 60 * 1000)}</div>
         </div>
       </div>
       <div className="options">
-        {round.categories.map((category) => {
-          const committed = round.myBets.find((bet) => bet.category === category.id)?.amount ?? 0;
+        {view.categories.map((category) => {
+          const committed = view.myBets.find((bet) => bet.category === category.id)?.amount ?? 0;
           return (
             <div key={category.id} className={`option${category.whale ? " whale" : ""}`}>
               <div className="option-head">
@@ -264,14 +293,14 @@ function RoundCard({
                   disabled={!canBet}
                   value={slip[category.id]?.amount ?? ""}
                   placeholder="0"
-                  onChange={(e) => onSlip(category.id, { amount: e.target.value.replace(/[^\d]/g, "").slice(0, 10), rank: round.place })}
+                  onChange={(e) => onSlip(category.id, { amount: e.target.value.replace(/[^\d]/g, "").slice(0, 10), rank: view.place })}
                 />
               </label>
             </div>
           );
         })}
       </div>
-      <p className="meta total-staked">Total staked {formatAura(round.poolTotal)} Aura</p>
+      <p className="meta total-staked">Total staked {formatAura(view.poolTotal)} Aura</p>
       <div className="actions">
         <span className="meta">
           staking {formatAura(stake)} · free {formatAura(free)}

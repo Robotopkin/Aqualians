@@ -93,6 +93,24 @@ const TX_BASE: Record<CategoryId, number> = {
   gaming: 27_000,
 };
 
+const VOLUME_STEPS = [-0.18, -0.11, -0.05, 0.02, 0.08, 0.14, 0.22];
+const TX_STEPS = [0.16, -0.13, 0.09, -0.06, 0.21, -0.02, 0.11];
+
+export function simulatedPair(category: CategoryId, start: number) {
+  const order = [...CATEGORIES.map((row) => row.id)].sort(
+    (a, b) => hashString(`${start}:${a}`) - hashString(`${start}:${b}`),
+  );
+  const index = Math.max(0, order.indexOf(category));
+  const open = { volume: VOLUME_BASE[category], tx: TX_BASE[category] };
+  return {
+    open,
+    close: {
+      volume: open.volume * (1 + VOLUME_STEPS[index]!),
+      tx: open.tx * (1 + TX_STEPS[index]!),
+    },
+  };
+}
+
 export function demoReading(category: CategoryId, now: number) {
   const h = hashString(category);
   const t = now / 1000;

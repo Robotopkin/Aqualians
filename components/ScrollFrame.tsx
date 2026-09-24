@@ -74,7 +74,7 @@ export default function ScrollFrame() {
     return () => observer.disconnect();
   }, []);
 
-  const ready = box.w > 8 && box.h > D * 2;
+  const ready = box.w > 8 && box.h >= D * 2;
   const glass = ready ? shape(box.w, box.h, R) : null;
 
   return (
