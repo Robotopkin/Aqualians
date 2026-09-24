@@ -1,5 +1,5 @@
 import { categoryById, demoReading } from "./categories";
-import { dailyBudget, nansenKey, pollSeconds, screenerChains } from "./config";
+import { dailyBudget, nansenKey, screenerChains } from "./config";
 import { metaGet, metaSet, one, rows, run } from "./db";
 import { utcMidnight } from "./time";
 import type { CategoryId, Reading } from "./types";
@@ -63,23 +63,6 @@ export async function callsTotal() {
   return Number(row?.n ?? 0);
 }
 
-export async function boardCallsThisTick(now = Date.now()) {
-  const budget = dailyBudget();
-  const used = await callsToday(now);
-  const room = budget - used;
-  if (room <= 0) return 0;
-  const elapsed = Math.max(1, now - utcMidnight(now));
-  const expected = (budget * elapsed) / 86_400_000;
-  const behind = expected - used;
-  if (behind < 0.85) return 0;
-  return Math.min(room, 8, Math.max(1, Math.ceil(behind)));
-}
-
-export async function pollDue(now = Date.now()) {
-  const last = Number(await metaGet("last_poll_at") ?? 0);
-  return now - last >= pollSeconds() * 1000;
-}
-
 function num(value: unknown) {
   const n = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
   return Number.isFinite(n) ? n : 0;
@@ -94,20 +77,15 @@ export async function fetchSector(category: CategoryId): Promise<Reading | null>
     include_stablecoins: category === "stablecoin",
     include_native_tokens: false,
     market_cap_usd: { min: category === "meme" ? 25_000 : 50_000 },
-    nof_buys: { min: 0 },
   };
   const request = {
     chains,
-    timeframe: "1h",
-    pagination: { page: 1, per_page: 100 },
+    timeframe: "24h",
+    pagination: { page: 1, per_page: 1000 },
     filters,
     order_by: [{ field: "volume", direction: "DESC" }],
   };
-  let result = await nansenPost("/api/v1/token-screener", request);
-  if (!result.ok && result.status === 422) {
-    const { nof_buys: _ignored, ...rest } = filters;
-    result = await nansenPost("/api/v1/token-screener", { ...request, filters: rest });
-  }
+  const result = await nansenPost("/api/v1/token-screener", request);
   if (!result.ok || !result.body || typeof result.body !== "object") return null;
   const data = (result.body as { data?: unknown }).data;
   if (!Array.isArray(data)) return null;

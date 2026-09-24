@@ -38,7 +38,6 @@ type RoundRow = {
 
 const globalForBoot = globalThis as unknown as {
   auraseaBoot?: boolean;
-  auraseaTimer?: NodeJS.Timeout;
   auraseaReady?: Promise<void>;
 };
 
@@ -51,7 +50,6 @@ export function boot() {
   }
   const ready = ensureServerAccount().then(() => runTick());
   globalForBoot.auraseaReady = ready;
-  globalForBoot.auraseaTimer = setInterval(() => void runTick(), 20_000);
   return ready;
 }
 

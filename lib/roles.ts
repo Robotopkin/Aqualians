@@ -1,7 +1,5 @@
 import {
   DOLPHIN_MIN_DAYS,
-  profileChains,
-  ROLE_CALL_CAP,
   SHARK_MIN_WIN_RATE,
   WHALE_VOLUME_USD,
 } from "./config";
@@ -38,9 +36,8 @@ export function roleFromStats(stats: {
 }
 
 export async function classifyWallet(address: string): Promise<{ role: Role; evidence: RoleEvidence }> {
-  const chains = profileChains();
   const evidence: RoleEvidence = {
-    chain: chains.join(","),
+    chain: "all",
     balanceUsd: null,
     tradedTimes: 0,
     winRate: null,
@@ -49,86 +46,56 @@ export async function classifyWallet(address: string): Promise<{ role: Role; evi
     publicFigureChecked: false,
     note: "Public Figure is not checked. Premium labels cost 500 credits.",
   };
-  let spent = 0;
-  const can = () => spent < ROLE_CALL_CAP;
 
   let volume = 0;
-  for (const chain of chains) {
-    if (!can()) break;
-    spent += 1;
-    const pnl = await nansenPost("/api/v1/profiler/address/pnl", {
-      address,
-      chain,
-      date: { from: isoDaysAgo(90), to: new Date().toISOString() },
-      pagination: { page: 1, per_page: 100 },
-    });
-    const data = pnl.ok && pnl.body && typeof pnl.body === "object" ? (pnl.body as { data?: unknown }).data : null;
-    if (Array.isArray(data)) {
-      for (const row of data) {
-        if (!row || typeof row !== "object") continue;
-        const token = row as { bought_usd?: unknown; sold_usd?: unknown };
-        volume += (num(token.bought_usd) ?? 0) + (num(token.sold_usd) ?? 0);
-      }
+  const pnl = await nansenPost("/api/v1/profiler/address/pnl", {
+    address,
+    chain: "all",
+    date: { from: isoDaysAgo(90), to: new Date().toISOString() },
+    pagination: { page: 1, per_page: 1000 },
+  });
+  const pnlData = pnl.ok && pnl.body && typeof pnl.body === "object" ? (pnl.body as { data?: unknown }).data : null;
+  if (Array.isArray(pnlData)) {
+    for (const row of pnlData) {
+      if (!row || typeof row !== "object") continue;
+      const token = row as { bought_usd?: unknown; sold_usd?: unknown };
+      volume += (num(token.bought_usd) ?? 0) + (num(token.sold_usd) ?? 0);
     }
-    if (volume >= WHALE_VOLUME_USD) break;
   }
   evidence.volumeUsd = roundUsd(volume);
   if (volume >= WHALE_VOLUME_USD) return { role: "whale", evidence };
 
+  const summary = await nansenPost("/api/v1/profiler/address/pnl-summary", {
+    address,
+    chain: "all",
+    date: { from: isoDaysAgo(90), to: new Date().toISOString() },
+  });
   let trades = 0;
-  let winWeighted = 0;
-  let winSamples = 0;
-  for (const chain of chains) {
-    if (!can()) break;
-    spent += 1;
-    const summary = await nansenPost("/api/v1/profiler/address/pnl-summary", {
-      address,
-      chain,
-      date: { from: isoDaysAgo(90), to: new Date().toISOString() },
-    });
-    if (summary.ok && summary.body && typeof summary.body === "object") {
-      const body = summary.body as { traded_times?: unknown; win_rate?: unknown };
-      const times = num(body.traded_times) ?? 0;
-      const rate = normalizeWinRate(num(body.win_rate), times);
-      trades += times;
-      if (rate != null && times > 0) {
-        winWeighted += rate * times;
-        winSamples += times;
-      }
-    }
+  if (summary.ok && summary.body && typeof summary.body === "object") {
+    const body = summary.body as { traded_times?: unknown; win_rate?: unknown };
+    trades = num(body.traded_times) ?? 0;
+    evidence.winRate = normalizeWinRate(num(body.win_rate), trades);
   }
   evidence.tradedTimes = trades;
-  evidence.volumeUsd = roundUsd(volume);
-  evidence.winRate = winSamples > 0 ? winWeighted / winSamples : null;
-  const beforeDays = roleFromStats({
-    volumeUsd: volume,
-    tradedTimes: trades,
-    winRate: evidence.winRate,
-    activeDays: 0,
-  });
-  if (beforeDays === "whale" || beforeDays === "shark") return { role: beforeDays, evidence };
+  if ((evidence.winRate ?? 0) >= SHARK_MIN_WIN_RATE) return { role: "shark", evidence };
 
   const days = new Set<string>();
-  const chain = chains[0] ?? "ethereum";
-  for (let page = 1; page <= 2; page++) {
-    if (!can()) break;
-    spent += 1;
-    const result = await nansenPost("/api/v1/profiler/address/transactions", {
-      address,
-      chain,
-      date: { from: isoDaysAgo(30), to: new Date().toISOString() },
-      hide_spam_token: true,
-      pagination: { page, per_page: 100 },
-    });
-    const body = result.ok && result.body && typeof result.body === "object" ? (result.body as { data?: unknown; pagination?: { is_last_page?: boolean } }) : null;
-    const data = body && Array.isArray(body.data) ? body.data : [];
-    for (const row of data) {
-      if (!row || typeof row !== "object") continue;
-      const stamp = (row as { block_timestamp?: unknown }).block_timestamp;
-      if (typeof stamp === "string" && stamp.length >= 10) days.add(stamp.slice(0, 10));
-    }
-    if (days.size >= DOLPHIN_MIN_DAYS) break;
-    if (!body || body.pagination?.is_last_page !== false) break;
+  const activity = await nansenPost("/api/v1/profiler/address/transactions", {
+    address,
+    chain: "all",
+    date: { from: isoDaysAgo(30), to: new Date().toISOString() },
+    hide_spam_token: true,
+    pagination: { page: 1, per_page: 100 },
+  });
+  const activityBody =
+    activity.ok && activity.body && typeof activity.body === "object"
+      ? (activity.body as { data?: unknown })
+      : null;
+  const activityData = activityBody && Array.isArray(activityBody.data) ? activityBody.data : [];
+  for (const row of activityData) {
+    if (!row || typeof row !== "object") continue;
+    const stamp = (row as { block_timestamp?: unknown }).block_timestamp;
+    if (typeof stamp === "string" && stamp.length >= 10) days.add(stamp.slice(0, 10));
   }
   evidence.activeDays = days.size;
   return {

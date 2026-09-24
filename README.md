@@ -1,6 +1,6 @@
 # AuraSea
 
-Aqualians is a daily prediction game. Connect a wallet and X, receive Aura, and stake it on which sector takes a set place in that day's move. Correct stakes share the losing pool. Nothing is spent on-chain: the server signs each ledger line.
+Aqualians is a daily prediction game. Connect a wallet and X, receive Aura, and stake it on which sector takes a set place in that day's move. Correct stakes share the whole pool. Nothing is spent on-chain: the server signs each ledger line.
 
 Two markets run on UTC boundaries.
 
@@ -20,6 +20,7 @@ A role is assigned once per wallet. Shrimp see how other shrimp split their stak
 
 Nansen decides the round and the role. Players never call it.
 
-- Each round keeps an opening print and a closing print. The server asks the token screener once per sector that is actually in play, then compares those two prints. The board does not show a live percent during the day.
-- A new wallet is classified once, from 90-day traded volume, then win rate, then recent active days. The calls stop as soon as the role is known.
-- Readings stay off until `NANSEN_ENABLED=1`.
+- Live daily rounds take prints only at 00:00 and 12:00 UTC. Each print covers the sectors needed by the round that closes and the round that opens.
+- For each sector, `Volume = Σ(volume)` and `Transaction count = Σ(nof_buys + nof_sells)` across Ethereum, Base, and Robinhood over the 24-hour timeframe. The board keeps only the opening and closing prints and does not show live progress.
+- A new wallet is classified once across all chains. The checks run in role priority order and stop immediately on a match: 90-day traded volume of at least $10,000 makes a Whale; otherwise a 90-day win rate of at least 50% makes a Shark; otherwise activity on at least 14 distinct days in the last 30 days makes a Dolphin; everyone else is a Shrimp. This costs one to three credits.
+- Five-minute test rounds are simulated and spend no sector credits. Set `AURASEA_ROUND_MS=0` for the live 24-hour schedule. `NANSEN_ENABLED=0` disables every Nansen call even when a key is present.
