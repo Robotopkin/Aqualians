@@ -86,7 +86,14 @@ export type TideResult = {
   pool: number;
   profit: number;
   lost: number;
-  picks: { title: string; amount: number; won: boolean | null }[];
+  picks: {
+    category: string;
+    title: string;
+    amount: number;
+    won: boolean | null;
+    rank: number | null;
+    changePct: number | null;
+  }[];
 };
 
 export type ReferralRow = {

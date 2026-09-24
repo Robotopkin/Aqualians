@@ -5,8 +5,9 @@ import { createPortal } from "react-dom";
 import { getAddress } from "viem";
 import { formatAura } from "@/lib/format";
 import { loginMessage, registerMessage } from "@/lib/messages";
-import type { PublicViewer, Role } from "@/lib/types";
+import type { PublicViewer, Role, TideResult } from "@/lib/types";
 import TideNum from "./TideNum";
+import { TideNet, TideResultPicks } from "./TideResultDetails";
 import { connectWallet, disconnectWallet, signWallet, silentWallet, walletProvider } from "./wallet";
 
 const ROLE_NAME: Record<Role, string> = {
@@ -62,6 +63,7 @@ export default function AccountBar({
   const [stepOpen, setStepOpen] = useState(false);
   const [reveal, setReveal] = useState<Reveal | null>(null);
   const [gift, setGift] = useState<Gift | null>(null);
+  const [result, setResult] = useState<TideResult | null>(null);
   const [mounted, setMounted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -149,6 +151,39 @@ export default function AccountBar({
     if (sessionStorage.getItem("aurasea_grant_seen") === grant.day) return;
     setGift(grant);
   }, [grant]);
+
+  useEffect(() => {
+    if (!viewer) {
+      setResult(null);
+      return;
+    }
+    let gone = false;
+    const check = async () => {
+      try {
+        const response = await fetch("/api/profile", { cache: "no-store" });
+        const body = (await response.json()) as { games?: TideResult[] };
+        if (!response.ok || !Array.isArray(body.games)) return;
+        let latest: TideResult | null = null;
+        for (let index = body.games.length - 1; index >= 0; index--) {
+          if (body.games[index]?.status !== "open") {
+            latest = body.games[index] ?? null;
+            break;
+          }
+        }
+        const seenKey = `aurasea_result_seen:${viewer.address.toLowerCase()}`;
+        if (!latest || localStorage.getItem(seenKey) === latest.roundId) return;
+        if (!gone) setResult(latest);
+      } catch {
+        /* The regular profile view can retry this notification later. */
+      }
+    };
+    void check();
+    const poll = setInterval(() => void check(), 10_000);
+    return () => {
+      gone = true;
+      clearInterval(poll);
+    };
+  }, [viewer?.address]);
 
   async function connect() {
     setError("");
@@ -247,6 +282,13 @@ export default function AccountBar({
     setStepOpen(false);
   }
 
+  function dismissResult() {
+    if (result && viewer) {
+      localStorage.setItem(`aurasea_result_seen:${viewer.address.toLowerCase()}`, result.roundId);
+    }
+    setResult(null);
+  }
+
   const label = !wallet ? "Connect Wallet" : viewer ? `@${viewer.xHandle}` : short(wallet);
 
   const enterModal = (
@@ -328,6 +370,21 @@ export default function AccountBar({
     </div>
   ) : null;
 
+  const resultModal = result ? (
+    <div className="veil">
+      <div className="card modal result-modal" role="dialog" aria-modal="true">
+        <div className="kicker">Tide settled</div>
+        <h2>{result.title}</h2>
+        <p className="meta">{result.question}</p>
+        <TideResultPicks game={result} />
+        <div className="result-modal-net"><TideNet game={result} /></div>
+        <button className="solid" onClick={dismissResult}>
+          Continue
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div
       className={`account${viewer ? " viewer" : ""}${viewer && open ? " open" : ""}`}
@@ -365,6 +422,7 @@ export default function AccountBar({
       {mounted && reveal ? createPortal(revealModal, document.body) : null}
       {mounted && !reveal && wallet && !viewer && stepOpen ? createPortal(enterModal, document.body) : null}
       {mounted && !reveal && gift ? createPortal(giftModal, document.body) : null}
+      {mounted && !reveal && !gift && result ? createPortal(resultModal, document.body) : null}
     </div>
   );
 }

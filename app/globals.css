@@ -257,19 +257,42 @@ h1 {
 }
 .history { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 12px; }
 .history li { border-top: 1px solid var(--line); padding-top: 12px; }
+.profile-scroll .option-top > div:first-child { min-width: 0; flex: 1; }
 .profile-picks {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px 8px;
-  margin-top: 7px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin-top: 10px;
 }
 .profile-pick {
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(3, 17, 24, 0.24);
   color: var(--mist);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
-.profile-pick.won { color: #7dffa8; }
-.profile-pick.lost { color: #ff8e86; }
+.profile-pick-rank {
+  margin-bottom: 4px;
+  color: var(--gold);
+  font-family: var(--font-display), "Cinzel", serif;
+  font-size: 12px;
+}
+.profile-pick-rank.winning { color: #7dffa8; }
+.profile-pick-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.profile-pick-main strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.profile-pick-change { color: var(--mist); white-space: nowrap; }
+.profile-pick-change.up { color: var(--dolphin); }
+.profile-pick-change.down { color: #ff8e86; }
+.profile-pick-stake { margin-top: 3px; color: var(--mist); font-size: 11px; }
 .round-net {
   display: grid;
   justify-items: end;
@@ -280,6 +303,9 @@ h1 {
 }
 .net-loss { color: #ff8e86; }
 .net-profit { color: #7dffa8; }
+.result-modal { width: min(680px, 100%); }
+.result-modal .profile-picks { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.result-modal-net { font-family: var(--font-display), "Cinzel", serif; font-size: 28px; }
 .leaderboard-rank {
   margin: 10px 0 4px;
   color: var(--mist);
@@ -667,6 +693,7 @@ h1, h2, .question, .kicker, .eyebrow {
   .rounds, .profile-grid, .top { display: grid; grid-template-columns: 1fr; }
   .head-side { width: max-content; justify-self: start; align-items: stretch; }
   .player-aura { text-align: center; }
+  .result-modal .profile-picks { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   h1 { font-size: 64px; }
   .profile-page { height: auto; min-height: 100vh; overflow: visible; }
   .profile-grid > .scroll-wrap > .card { height: auto; max-height: 65vh; }

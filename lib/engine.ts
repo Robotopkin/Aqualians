@@ -901,19 +901,31 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
   }
   const grouped = new Map<string, TideResult>();
   const lineup = new Map<string, string[]>();
+  const outcomes = new Map<string, Map<string, { rank: number; change: number }>>();
   for (const row of betRows) {
     const roundId = String(row.id);
     const settled = String(row.status) === "settled";
     let refund = returned.has(roundId);
-    let ranks: { category: string; rank: number }[] = [];
+    let ranks: { category: string; rank: number; change: number }[] = [];
     if (settled) {
       try {
         const parsed = JSON.parse(String(row.result_json ?? "{}")) as {
           refund?: boolean;
-          ranks?: { category: string; rank: number }[];
+          ranks?: { category: string; rank: number; change: number }[];
         };
         refund = refund || Boolean(parsed.refund);
         ranks = parsed.ranks ?? [];
+        if (!outcomes.has(roundId)) {
+          outcomes.set(
+            roundId,
+            new Map(
+              ranks.map((rank) => [
+                rank.category,
+                { rank: Number(rank.rank), change: Number(rank.change) },
+              ]),
+            ),
+          );
+        }
       } catch {
         ranks = [];
       }
@@ -954,9 +966,12 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
     game.stake += amount;
     if (pickWon === false) game.lost += amount;
     game.picks.push({
+      category: String(row.category),
       title: categoryById(String(row.category))?.title ?? String(row.category),
       amount,
       won: pickWon,
+      rank: null,
+      changePct: null,
     });
   }
   const pools = new Map<string, number>();
@@ -966,10 +981,26 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
   }
   for (const game of grouped.values()) {
     game.pool = pools.get(game.roundId) ?? game.stake;
-    const have = new Map(game.picks.map((pick) => [pick.title, pick]));
-    const titles = (lineup.get(game.roundId) ?? []).map((id) => categoryById(id)?.title ?? id);
-    if (titles.length) {
-      game.picks = titles.map((title) => have.get(title) ?? { title, amount: 0, won: null });
+    const have = new Map(game.picks.map((pick) => [pick.category, pick]));
+    const categories = lineup.get(game.roundId) ?? [];
+    const result = outcomes.get(game.roundId);
+    if (categories.length) {
+      game.picks = categories.map((category) => {
+        const outcome = result?.get(category);
+        const pick = have.get(category) ?? {
+          category,
+          title: categoryById(category)?.title ?? category,
+          amount: 0,
+          won: null,
+          rank: null,
+          changePct: null,
+        };
+        return {
+          ...pick,
+          rank: outcome?.rank ?? null,
+          changePct: outcome?.change ?? null,
+        };
+      });
     }
   }
   return [...grouped.values()];

@@ -5,6 +5,7 @@ import SeaBackground from "@/components/SeaBackground";
 import SiteHeader from "@/components/SiteHeader";
 import ScrollFrame from "@/components/ScrollFrame";
 import TideLoader from "@/components/TideLoader";
+import { TideNet, TideResultPicks } from "@/components/TideResultDetails";
 import { useSea } from "@/components/useSea";
 import { formatAura } from "@/lib/format";
 import type { LeaderboardBoard, ReferralRow, TideResult } from "@/lib/types";
@@ -97,6 +98,25 @@ export default function ProfilePage() {
     };
   }, [ready, viewerKey]);
 
+  useEffect(() => {
+    if (!ready || !viewerKey) return;
+    let gone = false;
+    const refreshGames = () => {
+      void fetch("/api/profile", { cache: "no-store" })
+        .then(async (response) => {
+          const body = await readJson<{ games?: TideResult[] }>(response);
+          if (!response.ok) throw new Error(body.error || "Could not load the profile");
+          if (!gone) setGames(body.games ?? []);
+        })
+        .catch(() => undefined);
+    };
+    const poll = setInterval(refreshGames, 10_000);
+    return () => {
+      gone = true;
+      clearInterval(poll);
+    };
+  }, [ready, viewerKey]);
+
   const link = state?.viewer && origin ? `${origin}/?ref=${state.viewer.referralCode}` : "";
 
   return (
@@ -130,30 +150,10 @@ export default function ProfilePage() {
                           <div className="meta">{game.question}</div>
                           <div className="meta">{new Date(game.startsAt).toISOString().slice(0, 16).replace("T", " ")} UTC</div>
                           <div className="meta">You staked {formatAura(game.stake)} Aura · pool {formatAura(game.pool)} Aura</div>
-                          <div className="profile-picks">
-                            {game.picks.map((pick) => (
-                              <span
-                                key={pick.title}
-                                className={`profile-pick${pick.amount > 0 && pick.won === true ? " won" : pick.amount > 0 && pick.won === false ? " lost" : ""}`}
-                              >
-                                {pick.title} <strong>{formatAura(pick.amount)}</strong>
-                              </span>
-                            ))}
-                          </div>
+                          <TideResultPicks game={game} />
                         </div>
                         {game.status === "open" ? <div className="phase">In the water</div> : null}
-                        {game.status === "returned" ? <div className="phase">Stakes returned</div> : null}
-                        {game.status === "won" || game.status === "lost" ? (
-                          <div className="round-net">
-                            {game.profit - game.stake > 0 ? (
-                              <span className="net-profit">+{formatAura(game.profit - game.stake)} Aura</span>
-                            ) : game.profit - game.stake < 0 ? (
-                              <span className="net-loss">−{formatAura(game.stake - game.profit)} Aura</span>
-                            ) : (
-                              <span className="meta">0 Aura</span>
-                            )}
-                          </div>
-                        ) : null}
+                        {game.status !== "open" ? <div className="round-net"><TideNet game={game} /></div> : null}
                       </div>
                     </li>
                   ))}
