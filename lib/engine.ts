@@ -800,8 +800,9 @@ export async function gamesFor(token: string): Promise<TideResult[] | null> {
     if (row.reason === "round-refund") returned.add(ref);
     if (row.reason !== "payout" || !row.payload) continue;
     try {
-      const payload = JSON.parse(String(row.payload)) as { profit?: number };
-      profitOf.set(ref, (profitOf.get(ref) ?? 0) + (Number(payload.profit) || 0));
+      const payload = JSON.parse(String(row.payload)) as { profit?: number; stake?: number };
+      const received = (Number(payload.stake) || 0) + (Number(payload.profit) || 0);
+      profitOf.set(ref, (profitOf.get(ref) ?? 0) + received);
     } catch {
       /* older rows have no split */
     }

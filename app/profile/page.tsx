@@ -143,10 +143,10 @@ export default function ProfilePage() {
                         {game.status === "returned" ? <div className="phase">Stakes returned</div> : null}
                         {game.status === "won" || game.status === "lost" ? (
                           <div className="round-net">
-                            {game.profit - game.lost > 0 ? (
-                              <span className="net-profit">+{formatAura(game.profit - game.lost)} Aura</span>
-                            ) : game.profit - game.lost < 0 ? (
-                              <span className="net-loss">−{formatAura(game.lost - game.profit)} Aura</span>
+                            {game.profit - game.stake > 0 ? (
+                              <span className="net-profit">+{formatAura(game.profit - game.stake)} Aura</span>
+                            ) : game.profit - game.stake < 0 ? (
+                              <span className="net-loss">−{formatAura(game.stake - game.profit)} Aura</span>
                             ) : (
                               <span className="meta">0 Aura</span>
                             )}

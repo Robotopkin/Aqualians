@@ -619,10 +619,11 @@ h2 {
   height: 112px;
   object-fit: contain;
   mix-blend-mode: screen;
+  transform-origin: center bottom;
   animation: tide-spin 1.1s linear infinite;
 }
 @keyframes tide-spin {
-  to { transform: rotate(360deg); }
+  to { transform: rotate(-360deg); }
 }
 
 h1, h2, .question, .kicker, .eyebrow {

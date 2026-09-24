@@ -97,6 +97,7 @@ const otherPay = shark.payouts.find((row) => row.userId === 2);
 assert.ok(sharkPay && otherPay);
 assert.equal(sharkPay.stakeBack, 100);
 assert.equal(otherPay.stakeBack, 50);
+assert.equal(sharkPay.stakeBack + sharkPay.profit + otherPay.stakeBack + otherPay.profit, 250);
 assert.equal(sharkPay.profit + otherPay.profit, 100);
 assert.ok(sharkPay.profit > otherPay.profit);
 assert.equal(shark.referrals[0]?.userId, 9);
