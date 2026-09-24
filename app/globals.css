@@ -79,7 +79,7 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
 
 .top {
   position: relative;
-  z-index: 5;
+  z-index: 20;
   display: flex;
   justify-content: space-between;
   gap: 24px;
@@ -145,6 +145,7 @@ h1 {
   position: absolute;
   inset: 0;
   z-index: 1;
+  overflow: hidden;
 }
 .account-trigger {
   position: absolute;
@@ -172,31 +173,15 @@ h1 {
   width: calc(100% - 40px);
   display: grid;
   gap: 8px;
-  max-height: 0;
-  margin-top: 0;
-  padding-top: 0;
-  border-top: 1px solid transparent;
-  opacity: 0;
-  overflow: hidden;
-  pointer-events: none;
-  text-align: left;
-  transform: translateY(-8px);
-  transition:
-    max-height 360ms ease 100ms,
-    margin-top 360ms ease 100ms,
-    padding-top 360ms ease 100ms,
-    border-color 220ms ease 140ms,
-    opacity 220ms ease 150ms,
-    transform 360ms ease 100ms;
-}
-.account-panel.open {
   max-height: 76px;
   margin-top: 14px;
   padding-top: 12px;
-  border-top-color: var(--line);
-  opacity: 1;
+  border-top: 1px solid var(--line);
+  pointer-events: none;
+  text-align: left;
+}
+.account-panel.open {
   pointer-events: auto;
-  transform: translateY(0);
 }
 .account-panel a, .menu-link {
   display: block;
